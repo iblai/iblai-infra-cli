@@ -140,9 +140,7 @@ def auth() -> None:
     from iblai_infra.terraform.state import clear_session
 
     clear_session()
-    creds = prompt_credentials(show_step=False)
-    ui.newline()
-    ui.success("Session saved. All subsequent commands will use these credentials.")
+    prompt_credentials(show_step=False)
     ui.newline()
 
 
