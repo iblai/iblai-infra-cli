@@ -86,18 +86,27 @@ def banner() -> None:
     """Print the ibl.ai welcome banner."""
     console.print()
     console.print(Rule(style=IBL_BLUE))
-    console.print(
-        f"[bold {IBL_BLUE}]"
-        " _ _     _           _\n"
-        "(_) |__ | |    __ _ (_)\n"
-        "| | '_ \\| |   / _` || |\n"
-        "| | |_) | |_ | (_| || |\n"
-        "|_|_.__/|____(_)__,_|_|"
-        "[/]\n"
-        "\n"
-        "[bold white]Infrastructure Provisioning[/bold white]",
-        justify="center",
-    )
+
+    if console.width >= 40:
+        console.print(
+            f"[bold {IBL_BLUE}]"
+            " _ _     _           _\n"
+            "(_) |__ | |    __ _ (_)\n"
+            "| | '_ \\| |   / _` || |\n"
+            "| | |_) | |_ | (_| || |\n"
+            "|_|_.__/|____(_)__,_|_|"
+            "[/]\n"
+            "\n"
+            "[bold white]Infrastructure Provisioning[/bold white]",
+            justify="center",
+        )
+    else:
+        console.print(
+            f"\n[brand]ibl.ai[/brand]\n"
+            "[bold white]Infrastructure Provisioning[/bold white]",
+            justify="center",
+        )
+
     console.print()
 
 
