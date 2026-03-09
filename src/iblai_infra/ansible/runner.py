@@ -15,7 +15,6 @@ from pathlib import Path
 
 from rich.console import Group
 from rich.live import Live
-from rich.panel import Panel
 from rich.table import Table
 
 from iblai_infra import ui
@@ -290,12 +289,7 @@ class AnsibleRunner:
     ) -> Group:
         table = self._build_role_table(roles)
         return Group(
-            Panel(
-                table,
-                title="[brand]Bootstrapping Platform[/brand]",
-                border_style="cyan",
-                padding=(0, 1),
-            ),
+            ui.section_group("Bootstrapping Platform", table),
             progress,
         )
 
@@ -335,9 +329,7 @@ class AnsibleRunner:
         if not roles:
             return
         table = self._build_role_table(roles)
-        ui.console.print(
-            Panel(table, title="[brand]Setup Results[/brand]", border_style="cyan", padding=(0, 1))
-        )
+        ui.section("Setup Results", table)
 
     # ------------------------------------------------------------------
     # JSON output parsing

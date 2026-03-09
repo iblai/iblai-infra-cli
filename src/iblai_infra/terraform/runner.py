@@ -15,7 +15,6 @@ from pathlib import Path
 
 from rich.console import Group
 from rich.live import Live
-from rich.panel import Panel
 from rich.status import Status
 
 from iblai_infra import ui
@@ -364,7 +363,7 @@ class TerraformRunner:
         """Compose the live display: resource table + progress bar."""
         table = ui.build_resource_table(resources, destroying=destroying)
         return Group(
-            Panel(table, title=f"[brand]{title}[/brand]", border_style="cyan", padding=(0, 1)),
+            ui.section_group(title, table),
             progress,
         )
 
@@ -373,9 +372,7 @@ class TerraformRunner:
         if not resources:
             return
         table = ui.build_resource_table(resources, destroying=destroying)
-        ui.console.print(
-            Panel(table, title="[brand]Resources[/brand]", border_style="cyan", padding=(0, 1))
-        )
+        ui.section("Resources", table)
 
     # ------------------------------------------------------------------
     # Plan resource counting

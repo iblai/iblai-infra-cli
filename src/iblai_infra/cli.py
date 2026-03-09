@@ -89,16 +89,7 @@ def infra_root(ctx: typer.Context) -> None:
     for cmd, desc in commands:
         table.add_row(cmd, desc)
 
-    from rich.panel import Panel
-
-    ui.console.print(
-        Panel(
-            table,
-            title=f"[brand]Available Commands[/brand]",
-            border_style=ui.IBL_BLUE,
-            padding=(1, 2),
-        )
-    )
+    ui.section("Available Commands", table)
 
     import questionary
 

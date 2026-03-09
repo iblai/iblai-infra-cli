@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import questionary
 
-from rich.console import Console, Group
+from rich.console import Console, Group, RenderableType
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
@@ -17,6 +17,7 @@ from rich.progress import (
     TextColumn,
     TimeElapsedColumn,
 )
+from rich.rule import Rule
 from rich.table import Table
 from rich.theme import Theme
 
@@ -146,8 +147,26 @@ def newline() -> None:
     console.print()
 
 
+def section(title: str, content: RenderableType) -> None:
+    """Print content between two horizontal rules with a centered title."""
+    console.print()
+    console.print(Rule(f"[brand]{title}[/brand]", style=IBL_BLUE))
+    console.print(content)
+    console.print(Rule(style=IBL_BLUE))
+    console.print()
+
+
+def section_group(title: str, content: RenderableType) -> Group:
+    """Return a Group of rule + content + rule for use in Live displays."""
+    return Group(
+        Rule(f"[brand]{title}[/brand]", style=IBL_BLUE),
+        content,
+        Rule(style=IBL_BLUE),
+    )
+
+
 def summary_panel(title: str, rows: list[tuple[str, str]]) -> None:
-    """Print a bordered summary panel with key-value rows."""
+    """Print a summary with key-value rows between horizontal rules."""
     table = Table(show_header=False, box=None, padding=(0, 2), expand=False)
     table.add_column("Key", style="key", min_width=18)
     table.add_column("Value", style="value")
@@ -158,11 +177,7 @@ def summary_panel(title: str, rows: list[tuple[str, str]]) -> None:
             value = value.replace("[bold]", f"[bold {IBL_BLUE_PALE}]").replace("[/bold]", "[/]")
         table.add_row(key, value)
 
-    console.print()
-    console.print(
-        Panel(table, title=f"[brand]{title}[/brand]", border_style=IBL_BLUE, padding=(1, 2))
-    )
-    console.print()
+    section(title, table)
 
 
 def abort(message: str = "Aborted.") -> None:
