@@ -101,6 +101,7 @@ def banner() -> None:
             f"[{IBL_BLUE_PALE}]Interactive setup for AWS[/]",
             border_style=IBL_BLUE,
             padding=(1, 4),
+            expand=False,
         )
     )
     console.print()
