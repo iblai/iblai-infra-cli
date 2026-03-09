@@ -98,12 +98,35 @@ def infra_root(ctx: typer.Context) -> None:
         )
     )
 
+    import questionary
+
     ui.newline()
-    ui.muted("  Getting started:")
-    ui.muted("    1. Check permissions   [bold]iblai infra permissions --check[/bold]")
-    ui.muted("    2. Provision infra     [bold]iblai infra provision[/bold]")
-    ui.muted("    3. View status         [bold]iblai infra status <name>[/bold]")
+    action = questionary.select(
+        "What would you like to do?",
+        choices=[
+            questionary.Choice("Check AWS permissions", value="permissions"),
+            questionary.Choice("Provision infrastructure", value="provision"),
+            questionary.Choice("List managed environments", value="list"),
+            questionary.Choice("Show required IAM policy", value="policy"),
+            questionary.Choice("Exit", value="exit"),
+        ],
+        style=ui.PROMPT_STYLE,
+    ).ask()
+
+    if action is None or action == "exit":
+        ui.newline()
+        raise typer.Exit()
+
     ui.newline()
+
+    if action == "permissions":
+        ctx.invoke(permissions, check=True)
+    elif action == "provision":
+        ctx.invoke(provision)
+    elif action == "list":
+        ctx.invoke(list_cmd)
+    elif action == "policy":
+        ctx.invoke(permissions, check=False)
 
 
 @infra_app.command()
