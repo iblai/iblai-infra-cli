@@ -120,13 +120,13 @@ def infra_root(ctx: typer.Context) -> None:
     ui.newline()
 
     if action == "permissions":
-        ctx.invoke(permissions, check=True)
+        ctx.invoke(permissions, check=True, profile=None, region="us-east-1")
     elif action == "provision":
         ctx.invoke(provision)
     elif action == "list":
         ctx.invoke(list_cmd)
     elif action == "policy":
-        ctx.invoke(permissions, check=False)
+        ctx.invoke(permissions, check=False, profile=None, region="us-east-1")
 
 
 @infra_app.command()
