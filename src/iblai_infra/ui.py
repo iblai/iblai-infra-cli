@@ -195,7 +195,7 @@ def make_overall_progress() -> Progress:
     )
 
 
-def build_resource_table(resources: dict[str, dict]) -> Table:
+def build_resource_table(resources: dict[str, dict], destroying: bool = False) -> Table:
     """Build a live-updating resource status table."""
     table = Table(
         show_header=True,
@@ -209,15 +209,18 @@ def build_resource_table(resources: dict[str, dict]) -> Table:
     table.add_column("Status", min_width=14, justify="center")
     table.add_column("Time", justify="right", min_width=6, style=IBL_BLUE_PALE)
 
+    done_label = "Destroyed" if destroying else "Created"
+    active_label = "Destroying" if destroying else "Creating"
+
     for addr, info in resources.items():
         status = info.get("status", "pending")
         elapsed = info.get("elapsed", 0)
         friendly = info.get("label", addr)
 
         if status == "complete":
-            status_display = "[bold #3ECF6E]\u2713 Created[/]"
+            status_display = f"[bold #3ECF6E]\u2713 {done_label}[/]"
         elif status == "in_progress":
-            status_display = f"[bold {IBL_BLUE_LIGHT}]\u25cf Creating[/]"
+            status_display = f"[bold {IBL_BLUE_LIGHT}]\u25cf {active_label}[/]"
         elif status == "error":
             status_display = "[bold #E85454]\u2717 Failed[/]"
         else:

@@ -67,6 +67,11 @@ def _friendly_label(addr: str) -> str:
     return addr
 
 
+def _is_data_source(addr: str) -> bool:
+    """Check if a Terraform address is a data source (not a managed resource)."""
+    return addr.startswith("data.")
+
+
 class TerraformRunner:
     """Manages Terraform workspace and execution lifecycle."""
 
@@ -284,7 +289,7 @@ class TerraformRunner:
         )
 
         with Live(
-            self._build_display(resources, progress, title="Destroying Resources"),
+            self._build_display(resources, progress, title="Destroying Resources", destroying=True),
             console=ui.console,
             refresh_per_second=4,
             transient=True,
@@ -302,11 +307,12 @@ class TerraformRunner:
 
                 elif msg_type == "apply_start":
                     addr = event["hook"]["resource"]["addr"]
-                    resources[addr] = {
-                        "label": _friendly_label(addr),
-                        "status": "in_progress",
-                        "elapsed": 0,
-                    }
+                    if not _is_data_source(addr):
+                        resources[addr] = {
+                            "label": _friendly_label(addr),
+                            "status": "in_progress",
+                            "elapsed": 0,
+                        }
 
                 elif msg_type == "apply_progress":
                     addr = event["hook"]["resource"]["addr"]
@@ -315,6 +321,8 @@ class TerraformRunner:
 
                 elif msg_type == "apply_complete":
                     addr = event["hook"]["resource"]["addr"]
+                    if _is_data_source(addr):
+                        continue
                     elapsed = event["hook"].get("elapsed_seconds", 0)
                     if addr in resources:
                         resources[addr]["status"] = "complete"
@@ -323,7 +331,7 @@ class TerraformRunner:
                     progress.update(task_id, completed=completed)
 
                 live.update(
-                    self._build_display(resources, progress, title="Destroying Resources")
+                    self._build_display(resources, progress, title="Destroying Resources", destroying=True)
                 )
 
             proc.wait()
@@ -351,19 +359,20 @@ class TerraformRunner:
         resources: dict[str, dict],
         progress: ui.Progress,
         title: str = "Provisioning Resources",
+        destroying: bool = False,
     ) -> Group:
         """Compose the live display: resource table + progress bar."""
-        table = ui.build_resource_table(resources)
+        table = ui.build_resource_table(resources, destroying=destroying)
         return Group(
             Panel(table, title=f"[brand]{title}[/brand]", border_style="cyan", padding=(0, 1)),
             progress,
         )
 
-    def _print_final_table(self, resources: dict[str, dict]) -> None:
+    def _print_final_table(self, resources: dict[str, dict], destroying: bool = False) -> None:
         """Print the resource table one final time (static, not live)."""
         if not resources:
             return
-        table = ui.build_resource_table(resources)
+        table = ui.build_resource_table(resources, destroying=destroying)
         ui.console.print(
             Panel(table, title="[brand]Resources[/brand]", border_style="cyan", padding=(0, 1))
         )
