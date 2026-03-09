@@ -83,6 +83,7 @@ def infra_root(ctx: typer.Context) -> None:
         ("iblai infra list", "List all managed environments"),
         ("iblai infra permissions", "Show required IAM policy"),
         ("iblai infra permissions --check", "Verify your AWS permissions"),
+        ("iblai infra auth", "Authenticate or switch AWS credentials"),
     ]
     for cmd, desc in commands:
         table.add_row(cmd, desc)
@@ -108,6 +109,7 @@ def infra_root(ctx: typer.Context) -> None:
             questionary.Choice("Provision infrastructure", value="provision"),
             questionary.Choice("List managed environments", value="list"),
             questionary.Choice("Show required IAM policy", value="policy"),
+            questionary.Choice("Switch AWS credentials", value="auth"),
             questionary.Choice("Exit", value="exit"),
         ],
         style=ui.PROMPT_STYLE,
@@ -127,6 +129,21 @@ def infra_root(ctx: typer.Context) -> None:
         ctx.invoke(list_cmd)
     elif action == "policy":
         ctx.invoke(permissions, check=False, profile=None, region="us-east-1")
+    elif action == "auth":
+        ctx.invoke(auth)
+
+
+@infra_app.command()
+def auth() -> None:
+    """Authenticate or switch AWS credentials."""
+    from iblai_infra.prompts.credentials import prompt_credentials
+    from iblai_infra.terraform.state import clear_session
+
+    clear_session()
+    creds = prompt_credentials(show_step=False)
+    ui.newline()
+    ui.success("Session saved. All subsequent commands will use these credentials.")
+    ui.newline()
 
 
 @infra_app.command()
