@@ -223,13 +223,15 @@ class TerraformRunner:
                     addr = event.get("hook", {}).get("resource", {}).get("addr", "unknown")
                     if addr in resources:
                         resources[addr]["status"] = "error"
-                    diag = event.get("diagnostic", {})
-                    errors.append(diag.get("summary", "Unknown error"))
+                    # Error detail comes via separate "diagnostic" events, not here
 
                 elif msg_type == "diagnostic":
                     diag = event.get("diagnostic", {})
                     if diag.get("severity") == "error":
-                        errors.append(diag.get("summary", "Unknown error"))
+                        summary = diag.get("summary", "")
+                        detail = diag.get("detail", "")
+                        msg = f"{summary}: {detail}" if summary and detail else (summary or detail or "Unknown error")
+                        errors.append(msg)
 
                 # Refresh the live display
                 live.update(self._build_display(resources, progress))
