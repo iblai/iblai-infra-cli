@@ -367,7 +367,7 @@ def permissions(
     if not check:
         ui.newline()
         ui.muted(
-            "Run [bold]iblai infra permissions --check[/bold] to verify"
+            "Run [brand]iblai infra permissions --check[/brand] to verify"
             " your credentials have these permissions."
         )
         ui.newline()
@@ -439,7 +439,7 @@ def list_cmd() -> None:
     if not states:
         ui.newline()
         ui.info("No managed infrastructure found.")
-        ui.muted("Run [bold]iblai infra provision[/bold] to create your first environment.")
+        ui.muted("Run [brand]iblai infra provision[/brand] to create your first environment.")
         ui.newline()
         return
 
@@ -488,6 +488,6 @@ def list_cmd() -> None:
     ui.newline()
     ui.muted(
         f"  {len(states)} environment(s) found."
-        " Use [bold]iblai infra status <name>[/bold] for details."
+        " Use [brand]iblai infra status <name>[/brand] for details."
     )
     ui.newline()
