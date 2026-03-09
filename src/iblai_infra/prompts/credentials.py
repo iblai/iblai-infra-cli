@@ -126,4 +126,8 @@ def prompt_credentials(show_step: bool = True) -> AWSCredentials:
     ui.success(f"Authenticated as [highlight]{identity.arn}[/highlight]")
     ui.muted(f"Account: {identity.account_id}")
 
+    # Save session for reuse across commands
+    from iblai_infra.terraform.state import save_session
+    save_session(creds)
+
     return creds

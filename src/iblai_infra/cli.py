@@ -12,7 +12,7 @@ import typer
 from rich.table import Table
 
 from iblai_infra import __version__, ui
-from iblai_infra.terraform.state import list_all_states, load_state
+from iblai_infra.terraform.state import list_all_states, load_session, load_state, save_session
 
 # ---------------------------------------------------------------------------
 # Root app: `iblai`
@@ -272,29 +272,37 @@ def _resolve_credentials(
 
     Returns (AWSCredentials, CallerIdentity).
     """
-    import questionary
     from rich.status import Status
 
     from iblai_infra.models import AWSCredentials, AuthMethod
-    from iblai_infra.providers.aws import (
-        has_env_credentials,
-        list_profiles,
-        validate_credentials,
-    )
+    from iblai_infra.providers.aws import validate_credentials
 
-    # If --profile was explicitly passed, try it directly
+    # 1. If --profile was explicitly passed, try it directly
     if profile:
         creds = AWSCredentials(method=AuthMethod.PROFILE, profile=profile, region=region)
         with Status("[info]Authenticating...[/info]", console=ui.console):
             try:
                 identity = validate_credentials(creds)
+                creds.account_id = identity.account_id
+                creds.arn = identity.arn
+                save_session(creds)
                 return creds, identity
             except ValueError:
                 pass
         ui.warning(f"Profile [highlight]{profile}[/highlight] failed to authenticate.")
         ui.newline()
 
-    # Otherwise, always use the interactive credentials wizard
+    # 2. Try saved session
+    saved = load_session()
+    if saved:
+        creds, identity = saved
+        ui.success(
+            f"Using saved session: [highlight]{identity.arn}[/highlight]"
+            f"  ({creds.region})"
+        )
+        return creds, identity
+
+    # 3. Interactive credentials wizard
     from iblai_infra.prompts.credentials import prompt_credentials
 
     creds = prompt_credentials(show_step=False)
