@@ -13,13 +13,25 @@ from iblai_infra.prompts.review import prompt_review
 from iblai_infra.terraform.runner import TerraformRunner
 
 
-def run_provision_wizard() -> None:
+def run_provision_wizard(show_banner: bool = True) -> None:
     """Run the full interactive provisioning wizard."""
+    from iblai_infra.terraform.state import load_session, save_session
 
-    ui.banner()
+    if show_banner:
+        ui.banner()
 
-    # Step 1 — AWS credentials
-    credentials = prompt_credentials()
+    # Step 1 — AWS credentials (reuse saved session if available)
+    saved = load_session()
+    if saved:
+        credentials, identity = saved
+        ui.step_header(1, 5, "AWS Authentication")
+        ui.success(
+            f"Using saved session: [highlight]{credentials.arn}[/highlight]"
+            f"  ({credentials.region})"
+        )
+    else:
+        credentials = prompt_credentials()
+        save_session(credentials)
 
     # Step 2 — Project & compute
     project_name, environment, compute = prompt_project_and_compute()

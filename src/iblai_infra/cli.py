@@ -124,7 +124,12 @@ def infra_root(ctx: typer.Context) -> None:
     if action == "permissions":
         ctx.invoke(permissions, check=True, profile=None, region="us-east-1")
     elif action == "provision":
-        ctx.invoke(provision)
+        from iblai_infra.app import run_provision_wizard
+        try:
+            run_provision_wizard(show_banner=False)
+        except KeyboardInterrupt:
+            ui.newline()
+            ui.abort("Interrupted.")
     elif action == "list":
         ctx.invoke(list_cmd)
     elif action == "policy":
