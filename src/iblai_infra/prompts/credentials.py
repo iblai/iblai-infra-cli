@@ -89,19 +89,16 @@ def prompt_credentials() -> AWSCredentials:
             ui.abort()
 
     # ----- region -----
-    region_labels = {
-        f"{code}  ({name})": code for code, name in AWS_REGIONS.items()
-    }
-    region_selection = questionary.autocomplete(
+    valid_regions = list(AWS_REGIONS.keys())
+    region = questionary.autocomplete(
         "AWS Region (type to filter):",
-        choices=list(region_labels.keys()),
-        default="us-east-1  (US East (N. Virginia))",
+        choices=valid_regions,
+        default="us-east-1",
         style=ui.PROMPT_STYLE,
-        validate=lambda v: v in region_labels or "Select a valid region from the list",
+        validate=lambda v: v in valid_regions or "Select a valid region from the list",
     ).ask()
-    if region_selection is None:
+    if region is None:
         ui.abort()
-    region = region_labels[region_selection]
 
     # ----- validate -----
     creds = AWSCredentials(
