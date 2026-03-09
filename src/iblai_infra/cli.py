@@ -282,7 +282,7 @@ def _resolve_credentials(
         validate_credentials,
     )
 
-    # 1. Try explicit profile flag
+    # If --profile was explicitly passed, try it directly
     if profile:
         creds = AWSCredentials(method=AuthMethod.PROFILE, profile=profile, region=region)
         with Status("[info]Authenticating...[/info]", console=ui.console):
@@ -292,49 +292,13 @@ def _resolve_credentials(
             except ValueError:
                 pass
         ui.warning(f"Profile [highlight]{profile}[/highlight] failed to authenticate.")
+        ui.newline()
 
-    # 2. Try environment variables
-    if not profile and has_env_credentials():
-        creds = AWSCredentials(method=AuthMethod.ENVIRONMENT, region=region)
-        with Status("[info]Authenticating via environment...[/info]", console=ui.console):
-            try:
-                identity = validate_credentials(creds)
-                return creds, identity
-            except ValueError:
-                pass
-
-    # 3. Try first available profile
-    if not profile:
-        profiles = list_profiles()
-        if profiles:
-            for p in profiles[:3]:  # try up to 3 profiles
-                creds = AWSCredentials(method=AuthMethod.PROFILE, profile=p, region=region)
-                with Status(f"[info]Trying profile '{p}'...[/info]", console=ui.console):
-                    try:
-                        identity = validate_credentials(creds)
-                        return creds, identity
-                    except ValueError:
-                        continue
-
-    # 4. Nothing worked — ask the user interactively
-    ui.newline()
-    ui.warning("No valid AWS credentials detected.")
-    ui.newline()
-
-    proceed = questionary.confirm(
-        "Would you like to authenticate now?",
-        default=True,
-        style=ui.PROMPT_STYLE,
-    ).ask()
-
-    if not proceed:
-        ui.abort("Cannot proceed without AWS credentials.")
-
+    # Otherwise, always use the interactive credentials wizard
     from iblai_infra.prompts.credentials import prompt_credentials
 
     creds = prompt_credentials()
 
-    # Re-validate (prompt_credentials already validates, but get the identity object)
     identity_obj = type("Id", (), {"account_id": creds.account_id, "arn": creds.arn})()
     return creds, identity_obj
 
