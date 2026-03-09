@@ -236,6 +236,86 @@ def status(
     ui.summary_panel(f"Infrastructure: {state.name}", rows)
 
 
+# ---------------------------------------------------------------------------
+# Shared credential resolution
+# ---------------------------------------------------------------------------
+
+
+def _resolve_credentials(
+    profile: str | None = None,
+    region: str = "us-east-1",
+) -> tuple:
+    """Try to authenticate with AWS. Falls back to interactive prompts if needed.
+
+    Returns (AWSCredentials, CallerIdentity).
+    """
+    import questionary
+    from rich.status import Status
+
+    from iblai_infra.models import AWSCredentials, AuthMethod
+    from iblai_infra.providers.aws import (
+        has_env_credentials,
+        list_profiles,
+        validate_credentials,
+    )
+
+    # 1. Try explicit profile flag
+    if profile:
+        creds = AWSCredentials(method=AuthMethod.PROFILE, profile=profile, region=region)
+        with Status("[info]Authenticating...[/info]", console=ui.console):
+            try:
+                identity = validate_credentials(creds)
+                return creds, identity
+            except ValueError:
+                pass
+        ui.warning(f"Profile [highlight]{profile}[/highlight] failed to authenticate.")
+
+    # 2. Try environment variables
+    if not profile and has_env_credentials():
+        creds = AWSCredentials(method=AuthMethod.ENVIRONMENT, region=region)
+        with Status("[info]Authenticating via environment...[/info]", console=ui.console):
+            try:
+                identity = validate_credentials(creds)
+                return creds, identity
+            except ValueError:
+                pass
+
+    # 3. Try first available profile
+    if not profile:
+        profiles = list_profiles()
+        if profiles:
+            for p in profiles[:3]:  # try up to 3 profiles
+                creds = AWSCredentials(method=AuthMethod.PROFILE, profile=p, region=region)
+                with Status(f"[info]Trying profile '{p}'...[/info]", console=ui.console):
+                    try:
+                        identity = validate_credentials(creds)
+                        return creds, identity
+                    except ValueError:
+                        continue
+
+    # 4. Nothing worked — ask the user interactively
+    ui.newline()
+    ui.warning("No valid AWS credentials detected.")
+    ui.newline()
+
+    proceed = questionary.confirm(
+        "Would you like to authenticate now?",
+        default=True,
+        style=ui.PROMPT_STYLE,
+    ).ask()
+
+    if not proceed:
+        ui.abort("Cannot proceed without AWS credentials.")
+
+    from iblai_infra.prompts.credentials import prompt_credentials
+
+    creds = prompt_credentials()
+
+    # Re-validate (prompt_credentials already validates, but get the identity object)
+    identity_obj = type("Id", (), {"account_id": creds.account_id, "arn": creds.arn})()
+    return creds, identity_obj
+
+
 @infra_app.command()
 def permissions(
     check: bool = typer.Option(
@@ -286,45 +366,15 @@ def permissions(
     # ----- Dry-run permission check -----
     from rich.status import Status
 
-    from iblai_infra.models import AWSCredentials, AuthMethod
     from iblai_infra.providers.aws import (
         check_permissions,
         get_session,
-        has_env_credentials,
-        validate_credentials,
     )
 
-    # Build credentials from flags or auto-detect
-    if profile:
-        creds = AWSCredentials(method=AuthMethod.PROFILE, profile=profile, region=region)
-    elif has_env_credentials():
-        creds = AWSCredentials(method=AuthMethod.ENVIRONMENT, region=region)
-    else:
-        from iblai_infra.providers.aws import list_profiles
-
-        profiles = list_profiles()
-        if profiles:
-            creds = AWSCredentials(
-                method=AuthMethod.PROFILE, profile=profiles[0], region=region,
-            )
-        else:
-            ui.error(
-                "No credentials found. Use --profile, set AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY,"
-                " or configure ~/.aws/credentials."
-            )
-            raise typer.Exit(1)
-
-    # Validate identity first
-    ui.newline()
-    with Status("[info]Authenticating...[/info]", console=ui.console):
-        try:
-            identity = validate_credentials(creds)
-        except ValueError as e:
-            ui.error(str(e))
-            raise typer.Exit(1)
+    creds, identity = _resolve_credentials(profile=profile, region=region)
 
     ui.success(f"Authenticated as [highlight]{identity.arn}[/highlight]")
-    ui.muted(f"Account: {identity.account_id}  Region: {region}")
+    ui.muted(f"Account: {identity.account_id}  Region: {creds.region}")
     ui.newline()
 
     # Run checks
