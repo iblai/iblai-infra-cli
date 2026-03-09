@@ -1,0 +1,131 @@
+"""Main wizard orchestrator — wires all prompts into a single flow."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from iblai_infra import ui
+from iblai_infra.models import InfraConfig
+from iblai_infra.prompts.credentials import prompt_credentials
+from iblai_infra.prompts.dns_certs import prompt_dns_and_certs
+from iblai_infra.prompts.infrastructure import prompt_project_and_compute, prompt_network_and_ssh
+from iblai_infra.prompts.review import prompt_review
+from iblai_infra.terraform.runner import TerraformRunner
+
+
+def run_provision_wizard() -> None:
+    """Run the full interactive provisioning wizard."""
+
+    ui.banner()
+
+    # Step 1 — AWS credentials
+    credentials = prompt_credentials()
+
+    # Step 2 — Project & compute
+    project_name, environment, compute = prompt_project_and_compute()
+
+    # Step 3 — Network & SSH
+    network, ssh = prompt_network_and_ssh(credentials, project_name, environment)
+
+    # Step 4 — Domain & certificates
+    dns, certificates = prompt_dns_and_certs(credentials)
+
+    # Assemble the full config
+    config = InfraConfig(
+        project_name=project_name,
+        environment=environment,
+        credentials=credentials,
+        network=network,
+        compute=compute,
+        ssh=ssh,
+        certificates=certificates,
+        dns=dns,
+    )
+
+    # Step 5 — Review & confirm
+    prompt_review(config)
+
+    # ----- Execute Terraform -----
+    ui.newline()
+    ui.console.print("  [brand]Provisioning infrastructure...[/brand]")
+
+    runner = TerraformRunner(config)
+    runner.setup()
+
+    # Show workspace directory with files
+    _show_workspace(runner.ws)
+
+    runner.init()
+    add_count = runner.plan()
+
+    if add_count == 0:
+        ui.warning("No resources to create. Infrastructure may already exist.")
+        return
+
+    outputs = runner.apply()
+
+    # ----- Show results -----
+    _show_results(config, outputs, runner.ws)
+
+
+def _show_workspace(ws: Path) -> None:
+    """Show the user where Terraform files live."""
+    ui.newline()
+
+    files = sorted(ws.iterdir()) if ws.exists() else []
+    if not files:
+        return
+
+    rows: list[tuple[str, str]] = []
+    rows.append(("Directory", str(ws)))
+    rows.append(("", ""))
+
+    for f in files:
+        if f.is_file():
+            size = f.stat().st_size
+            if size < 1024:
+                size_str = f"{size} B"
+            else:
+                size_str = f"{size / 1024:.1f} KB"
+            rows.append((f.name, f"[muted]{size_str}[/muted]"))
+
+    ui.summary_panel("Terraform Workspace", rows)
+
+
+def _show_results(config: InfraConfig, outputs: dict, ws: Path) -> None:
+    """Display the final infrastructure results."""
+    rows: list[tuple[str, str]] = []
+
+    if outputs.get("instance_public_ip"):
+        rows.append(("Instance IP", outputs["instance_public_ip"]))
+    if outputs.get("instance_private_ip"):
+        rows.append(("Private IP", outputs["instance_private_ip"]))
+    if outputs.get("alb_dns_name"):
+        rows.append(("ALB DNS", outputs["alb_dns_name"]))
+
+    if outputs.get("s3_bucket_backups"):
+        rows.append(("S3 Backups", outputs["s3_bucket_backups"]))
+    if outputs.get("s3_bucket_media"):
+        rows.append(("S3 Media", outputs["s3_bucket_media"]))
+    if outputs.get("s3_bucket_static"):
+        rows.append(("S3 Static", outputs["s3_bucket_static"]))
+
+    if outputs.get("ssh_command"):
+        rows.append(("SSH", outputs["ssh_command"]))
+    elif outputs.get("instance_public_ip"):
+        key_flag = ""
+        if config.ssh.private_key_path:
+            key_flag = f"-i {config.ssh.private_key_path} "
+        rows.append(("SSH", f"ssh {key_flag}ubuntu@{outputs['instance_public_ip']}"))
+
+    if outputs.get("application_url"):
+        rows.append(("App URL", outputs["application_url"]))
+
+    ui.summary_panel("Infrastructure Ready", rows)
+
+    # Show workspace location for reference
+    ui.info(f"Workspace: [highlight]{ws}[/highlight]")
+    ui.muted(f"  Contains: terraform.tfvars, main.tf, state.json, terraform.tfstate")
+    if config.ssh.private_key_path:
+        ui.info(f"SSH key:   [highlight]{config.ssh.private_key_path}[/highlight]")
+    ui.newline()
