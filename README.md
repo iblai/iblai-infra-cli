@@ -24,6 +24,15 @@ uv pip install -e .
 
 Run `iblai infra` to see all available commands and a getting-started guide.
 
+### Authentication
+
+If AWS credentials aren't configured when you run a command, the CLI will detect this and offer to walk you through authentication interactively — no need to set up `~/.aws/` first.
+
+The tool supports:
+- **AWS profiles** from `~/.aws/config` and `~/.aws/credentials`
+- **Environment variables** (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`)
+- **Manual entry** — access key + secret key (masked input)
+
 ### Check IAM permissions
 
 ```bash

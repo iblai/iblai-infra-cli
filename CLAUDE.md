@@ -12,7 +12,7 @@ Interactive CLI tool for provisioning ibl.ai platform infrastructure on AWS. Bui
 iblai-infra/
 ├── pyproject.toml                          # uv/hatch config, entry point: iblai = iblai_infra.cli:app
 ├── src/iblai_infra/
-│   ├── __init__.py                         # __version__ = "0.2.0"
+│   ├── __init__.py                         # __version__ = "0.3.0"
 │   ├── __main__.py                         # python -m iblai_infra support
 │   ├── cli.py                              # Typer app: root `iblai` + `infra` subgroup
 │   ├── app.py                              # Wizard orchestrator (5-step flow)
@@ -86,6 +86,16 @@ After confirmation: `TerraformRunner.setup()` → `init()` → `plan()` → `app
 - Uses harmless read-only API calls (e.g., `DryRun=True` for EC2, `list_*` for others)
 - `REQUIRED_IAM_POLICY` dict and `check_permissions()` live in `providers/aws.py`
 - Accepts `--profile` and `--region` flags for targeting specific credentials
+
+### Credential Resolution (`_resolve_credentials()` in cli.py)
+
+Shared helper used by any command needing AWS auth. Resolution order:
+1. Explicit `--profile` flag
+2. Environment variables (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`)
+3. Auto-detect from `~/.aws/` profiles (tries up to 3)
+4. **Interactive fallback** — prompts "Would you like to authenticate now?" and launches the full Step 1 credentials wizard
+
+This ensures no command fails silently on missing credentials.
 
 ### State Management
 

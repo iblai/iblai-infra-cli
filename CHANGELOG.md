@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.0] — 2026-03-09
+
+### Added
+- Interactive authentication fallback — when AWS credentials are missing or invalid, any command that needs auth now offers to launch the credentials wizard instead of failing
+- Shared `_resolve_credentials()` helper in CLI that tries env vars, `~/.aws/` profiles, then falls back to the interactive Step 1 wizard
+
 ## [0.2.0] — 2026-03-09
 
 ### Added
