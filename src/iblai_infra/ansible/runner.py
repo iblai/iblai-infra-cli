@@ -68,6 +68,7 @@ class AnsibleRunner:
 
     def run(self) -> bool:
         """Run ansible-playbook with live progress. Returns True on success."""
+        from collections import deque
         from datetime import datetime, timezone
 
         self.state.setup_status = "running"
@@ -80,6 +81,7 @@ class AnsibleRunner:
 
         completed = 0
         errors: list[str] = []
+        output_tail: deque[str] = deque(maxlen=30)
         current_role: str | None = None
         role_start_time: float = 0
 
@@ -114,6 +116,10 @@ class AnsibleRunner:
         ) as live:
             for line in proc.stdout:
                 line = line.rstrip()
+
+                # Keep a rolling buffer of output for error reporting
+                if line:
+                    output_tail.append(line)
 
                 # Detect role from TASK lines
                 role_name = self._extract_role_from_line(line)
@@ -158,8 +164,23 @@ class AnsibleRunner:
             self.state.setup_status = "failed"
             self.state.updated_at = datetime.now(timezone.utc)
             save_state(self.state)
-            for e in errors[:5]:
-                ui.error(e)
+
+            if errors:
+                ui.error("Ansible reported the following errors:")
+                ui.newline()
+                for e in errors[:5]:
+                    ui.muted(f"  {e}")
+            else:
+                ui.error(f"ansible-playbook exited with code {proc.returncode}")
+
+            # Show recent output for context
+            if output_tail:
+                ui.newline()
+                ui.error("Last lines of output:")
+                ui.newline()
+                for tail_line in output_tail:
+                    ui.muted(f"  {tail_line}")
+
             ui.newline()
             ui.error("Setup failed. Fix the issue and re-run [brand]iblai infra setup[/brand]")
             ui.newline()
