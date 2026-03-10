@@ -106,6 +106,7 @@ def infra_root(ctx: typer.Context) -> None:
             questionary.Choice("Exit", value="exit"),
         ],
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
 
     if action is None or action == "exit":
@@ -194,6 +195,7 @@ def _interactive_setup() -> None:
         "Which environment?",
         choices=choices,
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if name is None:
         return
@@ -232,6 +234,7 @@ def _run_setup(name: str) -> None:
             "Re-run setup?",
             default=False,
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
         ).ask()
         if not rerun:
             raise typer.Exit(0)
@@ -274,6 +277,7 @@ def _run_setup(name: str) -> None:
         "Proceed with setup?",
         default=True,
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if not confirm:
         ui.abort("Cancelled.")
@@ -340,6 +344,7 @@ def destroy(
         "Are you sure you want to destroy this infrastructure?",
         default=False,
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
 
     if not confirm:
@@ -350,6 +355,7 @@ def destroy(
         confirm2 = questionary.text(
             f'Type "{name}" to confirm production destruction:',
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
         ).ask()
         if confirm2 != name:
             ui.abort("Name did not match. Cancelled.")

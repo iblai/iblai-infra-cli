@@ -85,6 +85,7 @@ def prompt_review(config: InfraConfig) -> bool:
         "Proceed with infrastructure creation?",
         default=True,
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
 
     if proceed is None or not proceed:

@@ -167,6 +167,7 @@ def _offer_setup(config: InfraConfig, state) -> None:
         "Run platform setup now? (Ansible will bootstrap the VM)",
         default=False,
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
 
     if not run_setup:

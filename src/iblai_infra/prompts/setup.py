@@ -45,6 +45,7 @@ def _prompt_ssh_key_path() -> Path:
             Path(p).expanduser().exists() or "File not found"
         ),
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if key_path is None:
         ui.abort()
@@ -123,6 +124,7 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
         "DM release tag:",
         default="4.190.0-ai",
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if dm_image_tag is None:
         ui.abort()
@@ -133,6 +135,7 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
         "edX release tag:",
         default="sumac.2.4.13",
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if edx_image_tag is None:
         ui.abort()
@@ -148,6 +151,7 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
         "GitHub Personal Access Token:",
         validate=lambda v: len(v.strip()) > 0 or "Required",
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if git_access_token is None:
         ui.abort()
@@ -171,6 +175,7 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
             "Use the same AWS credentials from provisioning?",
             default=True,
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
         ).ask()
         if reuse is None:
             ui.abort()
@@ -184,6 +189,7 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
             "AWS Access Key ID (for the VM):",
             validate=lambda v: len(v.strip()) > 0 or "Required",
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
         ).ask()
         if aws_key_id is None:
             ui.abort()
@@ -193,6 +199,7 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
             "AWS Secret Access Key (for the VM):",
             validate=lambda v: len(v.strip()) > 0 or "Required",
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
         ).ask()
         if aws_secret is None:
             ui.abort()

@@ -29,6 +29,7 @@ def prompt_dns_and_certs(credentials: AWSCredentials) -> tuple[DNSConfig, Certif
         "Base domain:",
         validate=lambda v: _validate_domain(v) or "Enter a valid domain (e.g. example.com)",
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if base_domain is None:
         ui.abort()
@@ -61,6 +62,7 @@ def prompt_dns_and_certs(credentials: AWSCredentials) -> tuple[DNSConfig, Certif
                 ),
             ],
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
     ).ask()
         if use_route53 is None:
             ui.abort()
@@ -84,6 +86,7 @@ def prompt_dns_and_certs(credentials: AWSCredentials) -> tuple[DNSConfig, Certif
                 ),
             ],
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
     ).ask()
         if use_route53 is None:
             ui.abort()
@@ -108,6 +111,7 @@ def prompt_dns_and_certs(credentials: AWSCredentials) -> tuple[DNSConfig, Certif
                     for z in matching_zones
                 ],
                 style=ui.PROMPT_STYLE,
+                qmark=ui.QMARK,
     ).ask()
             if zone_selection is None:
                 ui.abort()
@@ -137,6 +141,7 @@ def prompt_dns_and_certs(credentials: AWSCredentials) -> tuple[DNSConfig, Certif
             "Proceed without HTTPS?",
             default=False,
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
     ).ask()
         if not proceed:
             ui.abort("Aborted — please prepare certificate files and try again.")
@@ -169,6 +174,7 @@ def _prompt_cert_upload() -> CertificateConfig:
             Path(p).expanduser().exists() or "File not found"
         ),
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if cert_path is None:
         ui.abort()
@@ -179,6 +185,7 @@ def _prompt_cert_upload() -> CertificateConfig:
             Path(p).expanduser().exists() or "File not found"
         ),
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if key_path is None:
         ui.abort()
@@ -187,6 +194,7 @@ def _prompt_cert_upload() -> CertificateConfig:
         "Certificate chain file (.pem) [optional, press Enter to skip]:",
         default="",
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
 
     cert_body = Path(cert_path).expanduser().read_text()

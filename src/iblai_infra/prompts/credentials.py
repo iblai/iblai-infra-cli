@@ -56,6 +56,7 @@ def prompt_credentials(show_step: bool = True) -> AWSCredentials:
         "How would you like to authenticate?",
         choices=choices,
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
 
     if method is None:
@@ -71,6 +72,7 @@ def prompt_credentials(show_step: bool = True) -> AWSCredentials:
             "Select AWS profile (type to filter):",
             choices=profiles,
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
             validate=lambda v: v in profiles or "Select a valid profile from the list",
         ).ask()
         if profile is None:
@@ -81,6 +83,7 @@ def prompt_credentials(show_step: bool = True) -> AWSCredentials:
             "AWS Access Key ID:",
             validate=lambda v: len(v.strip()) >= 16 or "Invalid access key",
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
         ).ask()
         if access_key_id is None:
             ui.abort()
@@ -89,6 +92,7 @@ def prompt_credentials(show_step: bool = True) -> AWSCredentials:
             "AWS Secret Access Key:",
             validate=lambda v: len(v.strip()) >= 16 or "Invalid secret key",
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
         ).ask()
         if secret_access_key is None:
             ui.abort()
@@ -100,6 +104,7 @@ def prompt_credentials(show_step: bool = True) -> AWSCredentials:
         choices=valid_regions,
         default="us-east-1",
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
         validate=lambda v: v in valid_regions or "Select a valid region from the list",
     ).ask()
     if region is None:

@@ -47,6 +47,7 @@ def prompt_project_and_compute() -> tuple[str, Environment, ComputeConfig]:
         )
         or "Alphanumeric, hyphens, and underscores only",
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if project_name is None:
         ui.abort()
@@ -61,6 +62,7 @@ def prompt_project_and_compute() -> tuple[str, Environment, ComputeConfig]:
             questionary.Choice("Development", value=Environment.DEV),
         ],
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if env is None:
         ui.abort()
@@ -76,6 +78,7 @@ def prompt_project_and_compute() -> tuple[str, Environment, ComputeConfig]:
         choices=list(instance_labels.keys()),
         default=f"t3.2xlarge  — {INSTANCE_TYPES['t3.2xlarge']}",
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
         validate=lambda v: v in instance_labels or "Select a valid instance type from the list",
     ).ask()
     if instance_selection is None:
@@ -87,6 +90,7 @@ def prompt_project_and_compute() -> tuple[str, Environment, ComputeConfig]:
             "Enter instance type (e.g. c5.xlarge):",
             validate=lambda v: bool(v.strip()) or "Required",
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
         ).ask()
         if instance_type is None:
             ui.abort()
@@ -97,6 +101,7 @@ def prompt_project_and_compute() -> tuple[str, Environment, ComputeConfig]:
         default="50",
         validate=lambda v: (v.isdigit() and int(v) >= 20) or "Must be a number >= 20",
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if volume_size is None:
         ui.abort()
@@ -110,6 +115,7 @@ def prompt_project_and_compute() -> tuple[str, Environment, ComputeConfig]:
         ],
         default="gp3",
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if volume_type is None:
         ui.abort()
@@ -141,6 +147,7 @@ def prompt_network_and_ssh(
         default="10.0.0.0/16",
         validate=_validate_cidr,
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if vpc_cidr is None:
         ui.abort()
@@ -153,6 +160,7 @@ def prompt_network_and_ssh(
             "Use this IP for SSH access?",
             default=True,
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
         ).ask()
         if use_detected is None:
             ui.abort()
@@ -187,7 +195,10 @@ def prompt_network_and_ssh(
         )
 
     ssh_method: SSHKeyMethod = questionary.select(
-        "SSH Key:", choices=ssh_choices, style=ui.PROMPT_STYLE,
+        "SSH Key:",
+        choices=ssh_choices,
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if ssh_method is None:
         ui.abort()
@@ -205,6 +216,7 @@ def prompt_network_and_ssh(
             "Path to public key file:",
             validate=lambda p: Path(p).expanduser().exists() or "File not found",
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
         ).ask()
         if pub_path is None:
             ui.abort()
@@ -220,6 +232,7 @@ def prompt_network_and_ssh(
             "Select key pair (type to filter):",
             choices=list(kp_labels.keys()),
             style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
             validate=lambda v: v in kp_labels or "Select a valid key pair from the list",
         ).ask()
         if kp_selection is None:
@@ -246,6 +259,7 @@ def _ask_vpn_ip() -> str:
         "Your VPN/static IP for SSH access:",
         validate=_validate_ip,
         style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
     ).ask()
     if ip is None:
         ui.abort()
