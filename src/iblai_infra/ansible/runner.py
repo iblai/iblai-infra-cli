@@ -1,13 +1,14 @@
 """Ansible execution wrapper with Rich Live progress display.
 
-Runs ansible-playbook with JSON stdout callback for structured progress
-parsing, combined with Rich Live + Progress for real-time visual feedback.
+Runs ansible-playbook and parses its default stdout output for real-time
+role tracking, combined with Rich Live + Progress for visual feedback.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -33,6 +34,11 @@ ROLE_LABELS: dict[str, str] = {
 
 TOTAL_ROLES = len(ROLE_LABELS)
 
+# Regex to match TASK lines: "TASK [role_name : task description]"
+_TASK_RE = re.compile(r"^TASK\s+\[(.+?)\]")
+# Regex to match fatal/failed lines
+_FATAL_RE = re.compile(r"^(fatal|FAILED!)", re.IGNORECASE)
+
 
 class AnsibleRunner:
     """Manages Ansible workspace and playbook execution."""
@@ -55,9 +61,8 @@ class AnsibleRunner:
         return True
 
     def setup(self) -> None:
-        """Copy templates, install required collections, and generate inventory."""
+        """Copy templates and generate inventory."""
         self._copy_templates()
-        self._install_collections()
         self._generate_inventory()
         ui.success(f"Ansible workspace ready  [muted]{self.ws}[/muted]")
 
@@ -95,7 +100,7 @@ class AnsibleRunner:
             cmd,
             cwd=self.ws,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
             env=env,
@@ -108,12 +113,10 @@ class AnsibleRunner:
             transient=True,
         ) as live:
             for line in proc.stdout:
-                event = self._parse_json_line(line)
-                if not event:
-                    continue
+                line = line.rstrip()
 
-                # Detect role transitions from plays/tasks
-                role_name = self._extract_role(event)
+                # Detect role from TASK lines
+                role_name = self._extract_role_from_line(line)
                 if role_name and role_name != current_role:
                     # Mark previous role as complete
                     if current_role and current_role in roles:
@@ -128,9 +131,8 @@ class AnsibleRunner:
                         roles[role_name]["status"] = "in_progress"
 
                 # Detect failures
-                if self._is_failure(event):
-                    msg = self._extract_error(event)
-                    errors.append(msg)
+                if _FATAL_RE.match(line):
+                    errors.append(line.strip())
                     if current_role and current_role in roles:
                         roles[current_role]["status"] = "error"
 
@@ -156,14 +158,8 @@ class AnsibleRunner:
             self.state.setup_status = "failed"
             self.state.updated_at = datetime.now(timezone.utc)
             save_state(self.state)
-            for e in errors:
+            for e in errors[:5]:
                 ui.error(e)
-            if not errors:
-                # Show stderr if no structured errors were captured
-                stderr = proc.stderr.read() if proc.stderr else ""
-                if stderr.strip():
-                    for errline in stderr.strip().splitlines()[-10:]:
-                        ui.error(errline)
             ui.newline()
             ui.error("Setup failed. Fix the issue and re-run [brand]iblai infra setup[/brand]")
             ui.newline()
@@ -239,16 +235,6 @@ class AnsibleRunner:
     # ------------------------------------------------------------------
     # Workspace setup
     # ------------------------------------------------------------------
-
-    def _install_collections(self) -> None:
-        """Install required Ansible collections (e.g. ansible.posix for json callback)."""
-        result = subprocess.run(
-            ["ansible-galaxy", "collection", "install", "ansible.posix", "--force"],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            ui.warning("Could not install ansible.posix collection — JSON output may not work")
 
     def _copy_templates(self) -> None:
         """Copy Ansible template files to workspace."""
@@ -340,27 +326,53 @@ class AnsibleRunner:
         ui.section("Setup Results", table)
 
     # ------------------------------------------------------------------
-    # JSON output parsing
+    # Line-based output parsing (default callback)
+    # ------------------------------------------------------------------
+
+    def _extract_role_from_line(self, line: str) -> str | None:
+        """Extract role name from an Ansible TASK line.
+
+        Ansible default output format:
+            TASK [role_name : task description] ***
+            TASK [task description] ***  (for pre_tasks without a role)
+        """
+        match = _TASK_RE.match(line)
+        if not match:
+            return None
+
+        task_label = match.group(1)
+
+        # "role_name : task description" format
+        if " : " in task_label:
+            role_part = task_label.split(" : ", 1)[0].strip()
+            if role_part in ROLE_LABELS:
+                return role_part
+
+        # Check if the task label contains a known role name
+        label_lower = task_label.lower()
+        for role_name in ROLE_LABELS:
+            if role_name in label_lower:
+                return role_name
+
+        return None
+
+    # ------------------------------------------------------------------
+    # JSON output parsing (kept for structured post-run analysis)
     # ------------------------------------------------------------------
 
     def _extract_role(self, event: dict) -> str | None:
         """Extract the role name from an ansible JSON event."""
-        # ansible JSON callback nests data in "plays" and "tasks"
-        # For task-level events, look at task.role or task path
         for key in ("play", "task"):
             obj = event.get(key, {})
             if isinstance(obj, dict):
-                # task.role field
                 role = obj.get("role", "")
                 if role and role in ROLE_LABELS:
                     return role
-                # task.name may start with "role : task_name"
                 name = obj.get("name", "")
                 for role_name in ROLE_LABELS:
                     if role_name in name.lower():
                         return role_name
 
-        # Check in nested plays->tasks structure (stats/recap format)
         for play in event.get("plays", []):
             for task in play.get("tasks", []):
                 task_info = task.get("task", {})
@@ -372,13 +384,11 @@ class AnsibleRunner:
 
     def _is_failure(self, event: dict) -> bool:
         """Check if an event represents a task failure."""
-        # Check stats for failures
         stats = event.get("stats", {})
         for host_stats in stats.values():
             if host_stats.get("failures", 0) > 0 or host_stats.get("unreachable", 0) > 0:
                 return True
 
-        # Check host results
         for play in event.get("plays", []):
             for task in play.get("tasks", []):
                 for host_result in task.get("hosts", {}).values():
@@ -399,7 +409,6 @@ class AnsibleRunner:
                         detail = msg or stderr or "Unknown error"
                         return f"{task_name}: {detail}"
 
-        # Fallback: check stats
         stats = event.get("stats", {})
         for host, host_stats in stats.items():
             failures = host_stats.get("failures", 0)
@@ -418,7 +427,6 @@ class AnsibleRunner:
     def _env(self) -> dict[str, str]:
         """Build environment for ansible-playbook subprocess."""
         env = os.environ.copy()
-        env["ANSIBLE_STDOUT_CALLBACK"] = "json"
         env["ANSIBLE_HOST_KEY_CHECKING"] = "False"
         env["ANSIBLE_FORCE_COLOR"] = "false"
         env["ANSIBLE_CONFIG"] = str(self.ws / "ansible.cfg")

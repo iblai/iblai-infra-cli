@@ -1,4 +1,4 @@
-"""Tests for iblai_infra.ansible.runner — JSON parsing, role detection, error extraction."""
+"""Tests for iblai_infra.ansible.runner — line parsing, role detection, error extraction."""
 
 from __future__ import annotations
 
@@ -68,6 +68,59 @@ class TestExtractRole:
     def test_python_role_from_name(self, runner):
         event = {"task": {"name": "python : Install pyenv"}}
         assert runner._extract_role(event) == "python"
+
+
+# ---------------------------------------------------------------------------
+# Line-based role extraction (default callback output)
+# ---------------------------------------------------------------------------
+
+
+class TestExtractRoleFromLine:
+    @pytest.fixture
+    def runner(self, project_state, setup_config):
+        r = AnsibleRunner.__new__(AnsibleRunner)
+        r.state = project_state
+        r.config = setup_config
+        r.ws = Path("/tmp/ansible-test")
+        return r
+
+    def test_task_with_role(self, runner):
+        line = "TASK [docker : Install Docker CE] ************************************"
+        assert runner._extract_role_from_line(line) == "docker"
+
+    def test_task_with_awscli_role(self, runner):
+        line = "TASK [awscli : Install AWS CLI v2] ***"
+        assert runner._extract_role_from_line(line) == "awscli"
+
+    def test_task_with_python_role(self, runner):
+        line = "TASK [python : Install pyenv] ***"
+        assert runner._extract_role_from_line(line) == "python"
+
+    def test_task_without_role(self, runner):
+        line = "TASK [Wait for cloud-init to finish] ***"
+        assert runner._extract_role_from_line(line) is None
+
+    def test_task_unknown_role(self, runner):
+        line = "TASK [some_other_role : Do something] ***"
+        assert runner._extract_role_from_line(line) is None
+
+    def test_not_a_task_line(self, runner):
+        assert runner._extract_role_from_line("PLAY [Bootstrap IBL Platform] ***") is None
+        assert runner._extract_role_from_line("ok: [32.192.6.92]") is None
+        assert runner._extract_role_from_line("changed: [32.192.6.92]") is None
+        assert runner._extract_role_from_line("") is None
+
+    def test_play_recap(self, runner):
+        assert runner._extract_role_from_line("PLAY RECAP ***") is None
+
+    def test_task_name_contains_role_keyword(self, runner):
+        line = "TASK [Gathering Facts] ***"
+        assert runner._extract_role_from_line(line) is None
+
+    def test_all_known_roles(self, runner):
+        for role_name in ROLE_LABELS:
+            line = f"TASK [{role_name} : Some task] ***"
+            assert runner._extract_role_from_line(line) == role_name
 
 
 # ---------------------------------------------------------------------------
@@ -485,10 +538,10 @@ class TestAnsibleEnv:
         runner.ws = tmp_path
 
         env = runner._env()
-        assert env["ANSIBLE_STDOUT_CALLBACK"] == "json"
         assert env["ANSIBLE_HOST_KEY_CHECKING"] == "False"
         assert env["ANSIBLE_FORCE_COLOR"] == "false"
         assert "ANSIBLE_CONFIG" in env
+        assert "ANSIBLE_STDOUT_CALLBACK" not in env
 
 
 # ---------------------------------------------------------------------------
