@@ -9,6 +9,7 @@
     ibl config save --set IBL_EDX.VERSION='{{ edx_version }}'
   args:
     executable: /bin/bash
+    chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
 
@@ -22,6 +23,7 @@
     ibl config save --set BASE_DOMAIN='{{ base_domain }}'
   args:
     executable: /bin/bash
+    chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
 
@@ -35,6 +37,7 @@
     ibl global-proxy launch-without-security
   args:
     executable: /bin/bash
+    chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
 
@@ -48,6 +51,7 @@
     ibl config save --set ENVIRONMENT_CONFIG='{{ env_config }}'
   args:
     executable: /bin/bash
+    chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
 
@@ -61,6 +65,7 @@
     ibl config save --set IBL_DM.IBL_DM_IMAGE='765174860755.dkr.ecr.us-east-1.amazonaws.com/ibl-dm-pro:{{ dm_image_tag }}'
   args:
     executable: /bin/bash
+    chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
 
@@ -74,6 +79,7 @@
     ibl config save --set IBL_EDX.IBL_EDX_IMAGE='765174860755.dkr.ecr.us-east-1.amazonaws.com/ibl-edx-pro:{{ edx_image_tag }}'
   args:
     executable: /bin/bash
+    chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
 
