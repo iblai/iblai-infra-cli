@@ -221,6 +221,7 @@ class SetupConfig(BaseModel):
     env_config: str = "single-server"
     dm_image_tag: str
     edx_image_tag: str
+    enable_ai: bool = True
     aws_access_key_id: str
     aws_secret_access_key: str
     aws_default_region: str

@@ -297,6 +297,7 @@ class TestSetupConfig:
         assert sc.ssh_user == "ubuntu"
         assert sc.edx_version == "sumac"
         assert sc.env_config == "single-server"
+        assert sc.enable_ai is True
 
 
 # ---------------------------------------------------------------------------

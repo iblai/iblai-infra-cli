@@ -142,6 +142,20 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
     edx_image_tag = edx_image_tag.strip()
     ui.success(f"iblai-edx-pro image tag: [highlight]{edx_image_tag}[/highlight]")
 
+    # AI features
+    enable_ai = questionary.confirm(
+        "Enable AI features for DM?",
+        default=True,
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if enable_ai is None:
+        ui.abort()
+    if enable_ai:
+        ui.success("AI features: [highlight]Enabled[/highlight]")
+    else:
+        ui.success("AI features: [highlight]Disabled[/highlight]")
+
     # ----- Step 3: Credentials -----
     ui.step_header(3, TOTAL_STEPS, "Credentials")
 
@@ -213,6 +227,7 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
         env_config=env_config,
         dm_image_tag=dm_image_tag,
         edx_image_tag=edx_image_tag,
+        enable_ai=enable_ai,
         aws_access_key_id=aws_key_id,
         aws_secret_access_key=aws_secret,
         aws_default_region=aws_region,

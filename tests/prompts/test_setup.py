@@ -190,7 +190,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.return_value = "ghp_testtoken"
-            mock_confirm.return_value.ask.return_value = True
+            # First confirm: enable AI, second confirm: reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, True]
             mock_text.return_value.ask.side_effect = ["4.189.1-ai", "sumac.2.4.13"]
 
             config = prompt_setup(state)
@@ -199,6 +200,7 @@ class TestPromptSetup:
         assert config.env_config == "single-server"
         assert config.dm_image_tag == "4.189.1-ai"
         assert config.edx_image_tag == "sumac.2.4.13"
+        assert config.enable_ai is True
         assert config.aws_access_key_id == "AKIA"
         assert config.aws_secret_access_key == "SECRET"
         assert config.git_access_token == "ghp_testtoken"
@@ -217,7 +219,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "NEW_SECRET"]
-            mock_confirm.return_value.ask.return_value = False
+            # First confirm: enable AI, second confirm: don't reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False]
             mock_text.return_value.ask.side_effect = ["4.189.1-ai", "sumac.2.4.13", "NEW_ACCESS_KEY"]
 
             config = prompt_setup(state)
@@ -226,6 +229,7 @@ class TestPromptSetup:
         assert config.env_config == "single-server"
         assert config.dm_image_tag == "4.189.1-ai"
         assert config.edx_image_tag == "sumac.2.4.13"
+        assert config.enable_ai is True
         assert config.aws_access_key_id == "NEW_ACCESS_KEY"
         assert config.aws_secret_access_key == "NEW_SECRET"
         assert config.git_access_token == "ghp_testtoken"
@@ -238,9 +242,12 @@ class TestPromptSetup:
 
         with (
             patch("questionary.password") as mock_password,
+            patch("questionary.confirm") as mock_confirm,
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "SECRET"]
+            # Only one confirm: enable AI (no reuse prompt when no access keys)
+            mock_confirm.return_value.ask.return_value = True
             mock_text.return_value.ask.side_effect = ["4.189.1-ai", "sumac.2.4.13", "ACCESS_KEY"]
 
             config = prompt_setup(state)
@@ -269,7 +276,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.return_value = "ghp_testtoken"
-            mock_confirm.return_value.ask.return_value = True
+            # First confirm: enable AI, second confirm: reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, True]
             mock_path.return_value.ask.return_value = str(new_key)
             mock_text.return_value.ask.side_effect = ["4.189.1-ai", "sumac.2.4.13"]
 
@@ -294,7 +302,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.return_value = "ghp_testtoken"
-            mock_confirm.return_value.ask.return_value = True
+            # First confirm: enable AI, second confirm: reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, True]
             mock_path.return_value.ask.return_value = str(key)
             mock_text.return_value.ask.side_effect = ["4.189.1-ai", "sumac.2.4.13"]
 
@@ -319,7 +328,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.return_value = "ghp_testtoken"
-            mock_confirm.return_value.ask.return_value = True
+            # First confirm: enable AI, second confirm: reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, True]
             mock_path.return_value.ask.return_value = str(key)
             mock_text.return_value.ask.side_effect = ["4.189.1-ai", "sumac.2.4.13"]
 

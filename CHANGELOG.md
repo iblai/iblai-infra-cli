@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.3] — 2026-03-10
+
+### Added
+- AI features prompt — asks user whether to enable AI for DM (`IBL_DM.ENABLE_IBL_AI` and `IBL_DM.ENABLE_IBL_AI_PLUS`), defaults to enabled
+- `enable_ai` field on `SetupConfig` model, passed through to Ansible extra vars
+- `ibl_platform` role configures both AI settings based on user choice
+
 ## [0.6.2] — 2026-03-10
 
 ### Fixed

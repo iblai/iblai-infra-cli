@@ -309,6 +309,7 @@ class AnsibleRunner:
             "env_config": self.config.env_config,
             "dm_image_tag": self.config.dm_image_tag,
             "edx_image_tag": self.config.edx_image_tag,
+            "enable_ai": self.config.enable_ai,
         }
 
     # ------------------------------------------------------------------

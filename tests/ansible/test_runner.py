@@ -122,6 +122,7 @@ class TestBuildExtraVars:
         assert extra["env_config"] == "single-server"
         assert extra["dm_image_tag"] == "4.189.1-ai"
         assert extra["edx_image_tag"] == "sumac.2.4.13"
+        assert extra["enable_ai"] is True
 
 
 # ---------------------------------------------------------------------------
