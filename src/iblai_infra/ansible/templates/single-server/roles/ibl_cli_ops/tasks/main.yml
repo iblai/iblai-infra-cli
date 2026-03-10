@@ -52,7 +52,7 @@
     eval "$(pyenv init -)"
     eval "$(pyenv virtualenv-init -)"
     pyenv activate "{{ venv_name }}"
-    ibl --version
+    ibl --help
   args:
     executable: /bin/bash
   environment:
