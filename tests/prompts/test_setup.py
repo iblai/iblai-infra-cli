@@ -214,14 +214,14 @@ class TestPromptSetup:
             patch("questionary.confirm") as mock_confirm,
             patch("questionary.text") as mock_text,
         ):
-            mock_select.return_value.ask.side_effect = ["teak", "isolated-services"]
+            mock_select.return_value.ask.side_effect = ["olive", "isolated-services"]
             mock_password.return_value.ask.return_value = "NEW_SECRET"
             mock_confirm.return_value.ask.return_value = False  # decline reuse
             mock_text.return_value.ask.return_value = "NEW_ACCESS_KEY"
 
             config = prompt_setup(state)
 
-        assert config.edx_version == "teak"
+        assert config.edx_version == "olive"
         assert config.env_config == "isolated-services"
         assert config.aws_access_key_id == "NEW_ACCESS_KEY"
         assert config.aws_secret_access_key == "NEW_SECRET"
@@ -237,13 +237,13 @@ class TestPromptSetup:
             patch("questionary.password") as mock_password,
             patch("questionary.text") as mock_text,
         ):
-            mock_select.return_value.ask.side_effect = ["redwood", "application-only"]
+            mock_select.return_value.ask.side_effect = ["olive", "application-only"]
             mock_password.return_value.ask.return_value = "SECRET"
             mock_text.return_value.ask.return_value = "ACCESS_KEY"
 
             config = prompt_setup(state)
 
-        assert config.edx_version == "redwood"
+        assert config.edx_version == "olive"
         assert config.env_config == "application-only"
 
     def test_ssh_key_not_found_prompts(self, tmp_path):

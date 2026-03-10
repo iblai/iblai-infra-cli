@@ -115,8 +115,7 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
         "Open edX version:",
         choices=[
             questionary.Choice("Sumac", value="sumac"),
-            questionary.Choice("Teak", value="teak"),
-            questionary.Choice("Redwood", value="redwood"),
+            questionary.Choice("Olive", value="olive"),
         ],
         default="sumac",
         style=ui.PROMPT_STYLE,
