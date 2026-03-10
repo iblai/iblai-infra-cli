@@ -15,3 +15,4 @@
     chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"

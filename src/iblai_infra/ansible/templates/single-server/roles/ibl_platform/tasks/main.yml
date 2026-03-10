@@ -12,6 +12,7 @@
     chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
 
 - name: Configure base domain
   become: false
@@ -26,6 +27,7 @@
     chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
 
 - name: Launch global reverse proxy
   become: false
@@ -40,6 +42,7 @@
     chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
 
 - name: Configure environment
   become: false
@@ -54,6 +57,7 @@
     chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
 
 - name: Configure DM image
   become: false
@@ -68,6 +72,7 @@
     chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
 
 - name: Configure edX image
   become: false
@@ -82,6 +87,7 @@
     chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
 
 - name: Login to ECR
   become: false

@@ -12,6 +12,7 @@
     chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
   timeout: 3600
   register: edx_launch_result
   ignore_errors: true

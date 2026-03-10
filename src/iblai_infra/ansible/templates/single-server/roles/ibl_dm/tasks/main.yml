@@ -12,6 +12,7 @@
     chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
   timeout: 1800
   register: dm_launch_result
   ignore_errors: true
