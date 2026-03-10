@@ -115,18 +115,8 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
     ui.success(f"Open edX version: [highlight]Sumac[/highlight]")
 
     # Environment config
-    env_config = questionary.select(
-        "Environment configuration:",
-        choices=[
-            questionary.Choice("Single Server (all services on one VM)", value="single-server"),
-            questionary.Choice("Isolated Services (separated services)", value="isolated-services"),
-            questionary.Choice("Application Only (no edX)", value="application-only"),
-        ],
-        default="single-server",
-        style=ui.PROMPT_STYLE,
-    ).ask()
-    if env_config is None:
-        ui.abort()
+    env_config = "single-server"
+    ui.success(f"Server type: [highlight]Single Server[/highlight]")
 
     # ----- Step 3: Credentials -----
     ui.step_header(3, TOTAL_STEPS, "Credentials")

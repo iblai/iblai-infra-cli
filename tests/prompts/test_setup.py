@@ -185,11 +185,9 @@ class TestPromptSetup:
         state = self._make_state(tmp_path)
 
         with (
-            patch("questionary.select") as mock_select,
             patch("questionary.password") as mock_password,
             patch("questionary.confirm") as mock_confirm,
         ):
-            mock_select.return_value.ask.return_value = "single-server"
             mock_password.return_value.ask.return_value = "ghp_testtoken"
             mock_confirm.return_value.ask.return_value = True
 
@@ -210,12 +208,10 @@ class TestPromptSetup:
         state = self._make_state(tmp_path)
 
         with (
-            patch("questionary.select") as mock_select,
             patch("questionary.password") as mock_password,
             patch("questionary.confirm") as mock_confirm,
             patch("questionary.text") as mock_text,
         ):
-            mock_select.return_value.ask.return_value = "isolated-services"
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "NEW_SECRET"]
             mock_confirm.return_value.ask.return_value = False
             mock_text.return_value.ask.return_value = "NEW_ACCESS_KEY"
@@ -223,7 +219,7 @@ class TestPromptSetup:
             config = prompt_setup(state)
 
         assert config.edx_version == "sumac"
-        assert config.env_config == "isolated-services"
+        assert config.env_config == "single-server"
         assert config.aws_access_key_id == "NEW_ACCESS_KEY"
         assert config.aws_secret_access_key == "NEW_SECRET"
         assert config.git_access_token == "ghp_testtoken"
@@ -235,18 +231,16 @@ class TestPromptSetup:
         state = self._make_state(tmp_path, access_key_id=None, secret_access_key=None)
 
         with (
-            patch("questionary.select") as mock_select,
             patch("questionary.password") as mock_password,
             patch("questionary.text") as mock_text,
         ):
-            mock_select.return_value.ask.return_value = "application-only"
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "SECRET"]
             mock_text.return_value.ask.return_value = "ACCESS_KEY"
 
             config = prompt_setup(state)
 
         assert config.edx_version == "sumac"
-        assert config.env_config == "application-only"
+        assert config.env_config == "single-server"
         assert config.git_access_token == "ghp_testtoken"
 
     def test_ssh_key_not_found_prompts(self, tmp_path):
@@ -261,12 +255,10 @@ class TestPromptSetup:
         new_key.chmod(0o600)
 
         with (
-            patch("questionary.select") as mock_select,
             patch("questionary.password") as mock_password,
             patch("questionary.confirm") as mock_confirm,
             patch("questionary.path") as mock_path,
         ):
-            mock_select.return_value.ask.return_value = "single-server"
             mock_password.return_value.ask.return_value = "ghp_testtoken"
             mock_confirm.return_value.ask.return_value = True
             mock_path.return_value.ask.return_value = str(new_key)
@@ -286,12 +278,10 @@ class TestPromptSetup:
         key.chmod(0o600)
 
         with (
-            patch("questionary.select") as mock_select,
             patch("questionary.password") as mock_password,
             patch("questionary.confirm") as mock_confirm,
             patch("questionary.path") as mock_path,
         ):
-            mock_select.return_value.ask.return_value = "single-server"
             mock_password.return_value.ask.return_value = "ghp_testtoken"
             mock_confirm.return_value.ask.return_value = True
             mock_path.return_value.ask.return_value = str(key)
@@ -311,12 +301,10 @@ class TestPromptSetup:
         key.chmod(0o600)
 
         with (
-            patch("questionary.select") as mock_select,
             patch("questionary.password") as mock_password,
             patch("questionary.confirm") as mock_confirm,
             patch("questionary.path") as mock_path,
         ):
-            mock_select.return_value.ask.return_value = "single-server"
             mock_password.return_value.ask.return_value = "ghp_testtoken"
             mock_confirm.return_value.ask.return_value = True
             mock_path.return_value.ask.return_value = str(key)
@@ -324,18 +312,3 @@ class TestPromptSetup:
             config = prompt_setup(state)
 
         assert config.ssh_private_key_path == key
-
-    def test_env_config_cancellation(self, tmp_path):
-        """Cancelling env config selection aborts."""
-        from iblai_infra.prompts.setup import prompt_setup
-
-        state = self._make_state(tmp_path)
-
-        with (
-            patch("questionary.select") as mock_select,
-            patch("questionary.password") as mock_password,
-        ):
-            mock_select.return_value.ask.return_value = None
-            mock_password.return_value.ask.return_value = "ghp_testtoken"
-            with pytest.raises(SystemExit):
-                prompt_setup(state)
