@@ -111,17 +111,8 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
     ui.success(f"Domain: [highlight]{base_domain}[/highlight]")
 
     # Open edX version
-    edx_version = questionary.select(
-        "Open edX version:",
-        choices=[
-            questionary.Choice("Sumac", value="sumac"),
-            questionary.Choice("Olive", value="olive"),
-        ],
-        default="sumac",
-        style=ui.PROMPT_STYLE,
-    ).ask()
-    if edx_version is None:
-        ui.abort()
+    edx_version = "sumac"
+    ui.success(f"Open edX version: [highlight]Sumac[/highlight]")
 
     # Environment config
     env_config = questionary.select(

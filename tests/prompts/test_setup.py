@@ -189,11 +189,8 @@ class TestPromptSetup:
             patch("questionary.password") as mock_password,
             patch("questionary.confirm") as mock_confirm,
         ):
-            # edX version -> sumac, env config -> single-server
-            mock_select.return_value.ask.side_effect = ["sumac", "single-server"]
-            # git token, then no AWS secret needed (reusing)
+            mock_select.return_value.ask.return_value = "single-server"
             mock_password.return_value.ask.return_value = "ghp_testtoken"
-            # reuse AWS creds -> yes
             mock_confirm.return_value.ask.return_value = True
 
             config = prompt_setup(state)
@@ -218,15 +215,14 @@ class TestPromptSetup:
             patch("questionary.confirm") as mock_confirm,
             patch("questionary.text") as mock_text,
         ):
-            mock_select.return_value.ask.side_effect = ["olive", "isolated-services"]
-            # git token first, then AWS secret
+            mock_select.return_value.ask.return_value = "isolated-services"
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "NEW_SECRET"]
-            mock_confirm.return_value.ask.return_value = False  # decline reuse
+            mock_confirm.return_value.ask.return_value = False
             mock_text.return_value.ask.return_value = "NEW_ACCESS_KEY"
 
             config = prompt_setup(state)
 
-        assert config.edx_version == "olive"
+        assert config.edx_version == "sumac"
         assert config.env_config == "isolated-services"
         assert config.aws_access_key_id == "NEW_ACCESS_KEY"
         assert config.aws_secret_access_key == "NEW_SECRET"
@@ -243,14 +239,13 @@ class TestPromptSetup:
             patch("questionary.password") as mock_password,
             patch("questionary.text") as mock_text,
         ):
-            mock_select.return_value.ask.side_effect = ["olive", "application-only"]
-            # git token first, then AWS secret
+            mock_select.return_value.ask.return_value = "application-only"
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "SECRET"]
             mock_text.return_value.ask.return_value = "ACCESS_KEY"
 
             config = prompt_setup(state)
 
-        assert config.edx_version == "olive"
+        assert config.edx_version == "sumac"
         assert config.env_config == "application-only"
         assert config.git_access_token == "ghp_testtoken"
 
@@ -259,7 +254,6 @@ class TestPromptSetup:
         from iblai_infra.prompts.setup import prompt_setup
 
         state = self._make_state(tmp_path)
-        # Delete the key file
         Path(state.config.ssh.private_key_path).unlink()
 
         new_key = tmp_path / "new-key.pem"
@@ -272,7 +266,7 @@ class TestPromptSetup:
             patch("questionary.confirm") as mock_confirm,
             patch("questionary.path") as mock_path,
         ):
-            mock_select.return_value.ask.side_effect = ["sumac", "single-server"]
+            mock_select.return_value.ask.return_value = "single-server"
             mock_password.return_value.ask.return_value = "ghp_testtoken"
             mock_confirm.return_value.ask.return_value = True
             mock_path.return_value.ask.return_value = str(new_key)
@@ -297,7 +291,7 @@ class TestPromptSetup:
             patch("questionary.confirm") as mock_confirm,
             patch("questionary.path") as mock_path,
         ):
-            mock_select.return_value.ask.side_effect = ["sumac", "single-server"]
+            mock_select.return_value.ask.return_value = "single-server"
             mock_password.return_value.ask.return_value = "ghp_testtoken"
             mock_confirm.return_value.ask.return_value = True
             mock_path.return_value.ask.return_value = str(key)
@@ -322,7 +316,7 @@ class TestPromptSetup:
             patch("questionary.confirm") as mock_confirm,
             patch("questionary.path") as mock_path,
         ):
-            mock_select.return_value.ask.side_effect = ["sumac", "single-server"]
+            mock_select.return_value.ask.return_value = "single-server"
             mock_password.return_value.ask.return_value = "ghp_testtoken"
             mock_confirm.return_value.ask.return_value = True
             mock_path.return_value.ask.return_value = str(key)
@@ -331,15 +325,17 @@ class TestPromptSetup:
 
         assert config.ssh_private_key_path == key
 
-    def test_edx_version_cancellation(self, tmp_path):
-        """Cancelling edX version selection aborts."""
+    def test_env_config_cancellation(self, tmp_path):
+        """Cancelling env config selection aborts."""
         from iblai_infra.prompts.setup import prompt_setup
 
         state = self._make_state(tmp_path)
 
         with (
             patch("questionary.select") as mock_select,
+            patch("questionary.password") as mock_password,
         ):
             mock_select.return_value.ask.return_value = None
+            mock_password.return_value.ask.return_value = "ghp_testtoken"
             with pytest.raises(SystemExit):
                 prompt_setup(state)
