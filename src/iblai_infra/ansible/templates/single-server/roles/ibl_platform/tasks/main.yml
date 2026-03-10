@@ -44,6 +44,13 @@
     HOME: "/home/{{ ansible_user }}"
     IBL_ROOT: "{{ ibl_root }}/"
 
+- name: Ensure ibl_local_default docker network exists
+  become: false
+  command: docker network create ibl_local_default
+  register: net_create
+  failed_when: net_create.rc != 0 and 'already exists' not in (net_create.stderr | default(''))
+  changed_when: net_create.rc == 0
+
 - name: Configure environment
   become: false
   shell: |

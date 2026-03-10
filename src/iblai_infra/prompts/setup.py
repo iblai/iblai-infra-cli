@@ -121,7 +121,7 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
 
     # Release image tags
     dm_image_tag = questionary.text(
-        "DM release tag:",
+        "iblai-dm-pro release tag:",
         default="4.189.1-ai",
         style=ui.PROMPT_STYLE,
         qmark=ui.QMARK,
@@ -129,10 +129,10 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
     if dm_image_tag is None:
         ui.abort()
     dm_image_tag = dm_image_tag.strip()
-    ui.success(f"DM image tag: [highlight]{dm_image_tag}[/highlight]")
+    ui.success(f"iblai-dm-pro image tag: [highlight]{dm_image_tag}[/highlight]")
 
     edx_image_tag = questionary.text(
-        "edX release tag:",
+        "iblai-edx-pro release tag:",
         default="sumac.2.4.13",
         style=ui.PROMPT_STYLE,
         qmark=ui.QMARK,
@@ -140,7 +140,7 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
     if edx_image_tag is None:
         ui.abort()
     edx_image_tag = edx_image_tag.strip()
-    ui.success(f"edX image tag: [highlight]{edx_image_tag}[/highlight]")
+    ui.success(f"iblai-edx-pro image tag: [highlight]{edx_image_tag}[/highlight]")
 
     # ----- Step 3: Credentials -----
     ui.step_header(3, TOTAL_STEPS, "Credentials")

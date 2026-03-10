@@ -28,7 +28,7 @@
 
 - name: Verify DM containers are running
   become: false
-  shell: docker ps --filter "name=ibl-dm-pro" --format "{{ '{{' }}.Names{{ '}}' }}" 2>&1
+  shell: docker ps --filter "name=ibl_dm" --format "{{ '{{' }}.Names{{ '}}' }}" 2>&1
   args:
     executable: /bin/bash
   register: dm_containers
@@ -36,3 +36,11 @@
 - name: Show running DM containers
   debug:
     var: dm_containers.stdout_lines
+
+- name: Fail if no DM containers are running
+  fail:
+    msg: >-
+      No ibl-dm-pro containers found after launch.
+      Check 'ibl dm launch' output above for errors
+      (common cause: missing ibl_local_default docker network).
+  when: dm_containers.stdout | trim | length == 0

@@ -36,7 +36,7 @@ iblai-infra/
 │   └── ansible/
 │       ├── __init__.py
 │       ├── runner.py                       # AnsibleRunner: preflight, SSH test, inventory, playbook execution
-│       └── templates/single-server/        # Ansible playbook + roles (docker, python, awscli, ibl_cli_ops, ibl_platform)
+│       └── templates/single-server/        # Ansible playbook + roles (docker, awscli, python, ibl_cli_ops, ibl_platform, ibl_dm, ibl_edx, final_steps)
 ├── tests/
 │   ├── conftest.py                         # Shared fixtures (aws_credentials, infra_config, project_state, workspace_root)
 │   ├── test_models.py                      # Pydantic model validation, all enum combos, edge cases

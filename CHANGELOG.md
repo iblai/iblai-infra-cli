@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.2] — 2026-03-10
+
+### Fixed
+- Create `ibl_local_default` docker network in `ibl_platform` role after global proxy launch — DM compose requires it as an external network but the proxy only creates `ibl_default`
+- Add container verification to `ibl_dm` role — fails with actionable error if no DM containers are running after launch
+- Add container verification to `ibl_edx` role — fails if no edX containers are running after launch
+- Broadened DM container filter from `ibl-dm-pro` to `ibl_dm` to match actual container naming
+
 ## [0.6.1] — 2026-03-10
 
 ### Fixed

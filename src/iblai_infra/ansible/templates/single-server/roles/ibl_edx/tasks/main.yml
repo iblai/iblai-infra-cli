@@ -25,3 +25,21 @@
   fail:
     msg: "ibl edx launch failed with exit code {{ edx_launch_result.rc }}"
   when: edx_launch_result.rc != 0
+
+- name: Verify edX containers are running
+  become: false
+  shell: docker ps --filter "name=ibl_prod_lms" --format "{{ '{{' }}.Names{{ '}}' }}" 2>&1
+  args:
+    executable: /bin/bash
+  register: edx_containers
+
+- name: Show running edX containers
+  debug:
+    var: edx_containers.stdout_lines
+
+- name: Fail if no edX containers are running
+  fail:
+    msg: >-
+      No edX containers found after launch.
+      Check 'ibl edx launch' output above for errors.
+  when: edx_containers.stdout | trim | length == 0
