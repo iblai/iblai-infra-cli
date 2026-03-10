@@ -30,6 +30,8 @@ ROLE_LABELS: dict[str, str] = {
     "docker": "Docker Engine",
     "awscli": "AWS CLI",
     "python": "Python Environment",
+    "ibl_cli_ops": "IBL CLI",
+    "ibl_platform": "Platform Config",
 }
 
 TOTAL_ROLES = len(ROLE_LABELS)
@@ -291,6 +293,7 @@ class AnsibleRunner:
             "base_domain": self.config.base_domain,
             "edx_version": self.config.edx_version,
             "env_config": self.config.env_config,
+            "git_access_token": self.config.git_access_token,
         }
 
     # ------------------------------------------------------------------

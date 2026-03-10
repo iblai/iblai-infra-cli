@@ -350,7 +350,7 @@ class TestBuildExtraVars:
         runner.config = setup_config
 
         extra = runner._build_extra_vars()
-        assert "git_access_token" not in extra
+        assert extra["git_access_token"] == "ghp_testtoken123"
         assert extra["aws_access_key_id"] == "AKIAIOSFODNN7EXAMPLE"
         assert extra["aws_default_region"] == "us-east-1"
         assert extra["base_domain"] == "example.com"
@@ -415,7 +415,7 @@ class TestConstants:
         assert TOTAL_ROLES == len(ROLE_LABELS)
 
     def test_expected_roles(self):
-        expected = {"docker", "awscli", "python"}
+        expected = {"docker", "awscli", "python", "ibl_cli_ops", "ibl_platform"}
         assert set(ROLE_LABELS.keys()) == expected
 
 

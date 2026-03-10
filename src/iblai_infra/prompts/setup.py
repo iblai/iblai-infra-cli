@@ -140,6 +140,18 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
     # ----- Step 3: Credentials -----
     ui.step_header(3, TOTAL_STEPS, "Credentials")
 
+    # GitHub PAT for cloning ibl-cli-ops
+    ui.info("A GitHub Personal Access Token is needed to install ibl-cli-ops on the VM.")
+    git_access_token = questionary.password(
+        "GitHub Personal Access Token:",
+        validate=lambda v: len(v.strip()) > 0 or "Required",
+        style=ui.PROMPT_STYLE,
+    ).ask()
+    if git_access_token is None:
+        ui.abort()
+    git_access_token = git_access_token.strip()
+    ui.success("GitHub token provided")
+
     # AWS credentials for the VM
     ui.info("AWS credentials will be configured on the VM for S3 access.")
 
@@ -190,4 +202,5 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
         aws_access_key_id=aws_key_id,
         aws_secret_access_key=aws_secret,
         aws_default_region=aws_region,
+        git_access_token=git_access_token,
     )

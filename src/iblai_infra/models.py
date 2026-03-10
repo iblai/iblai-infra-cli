@@ -222,6 +222,7 @@ class SetupConfig(BaseModel):
     aws_access_key_id: str
     aws_secret_access_key: str
     aws_default_region: str
+    git_access_token: str
 
 
 # ---------------------------------------------------------------------------

@@ -186,10 +186,13 @@ class TestPromptSetup:
 
         with (
             patch("questionary.select") as mock_select,
+            patch("questionary.password") as mock_password,
             patch("questionary.confirm") as mock_confirm,
         ):
             # edX version -> sumac, env config -> single-server
             mock_select.return_value.ask.side_effect = ["sumac", "single-server"]
+            # git token, then no AWS secret needed (reusing)
+            mock_password.return_value.ask.return_value = "ghp_testtoken"
             # reuse AWS creds -> yes
             mock_confirm.return_value.ask.return_value = True
 
@@ -199,6 +202,7 @@ class TestPromptSetup:
         assert config.env_config == "single-server"
         assert config.aws_access_key_id == "AKIA"
         assert config.aws_secret_access_key == "SECRET"
+        assert config.git_access_token == "ghp_testtoken"
         assert config.target_host == "54.1.2.3"
         assert config.base_domain == "example.com"
 
@@ -215,7 +219,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_select.return_value.ask.side_effect = ["olive", "isolated-services"]
-            mock_password.return_value.ask.return_value = "NEW_SECRET"
+            # git token first, then AWS secret
+            mock_password.return_value.ask.side_effect = ["ghp_testtoken", "NEW_SECRET"]
             mock_confirm.return_value.ask.return_value = False  # decline reuse
             mock_text.return_value.ask.return_value = "NEW_ACCESS_KEY"
 
@@ -225,6 +230,7 @@ class TestPromptSetup:
         assert config.env_config == "isolated-services"
         assert config.aws_access_key_id == "NEW_ACCESS_KEY"
         assert config.aws_secret_access_key == "NEW_SECRET"
+        assert config.git_access_token == "ghp_testtoken"
 
     def test_flow_no_access_keys_prompts_directly(self, tmp_path):
         """When provisioning used profile auth, no reuse prompt — goes straight to new keys."""
@@ -238,13 +244,15 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_select.return_value.ask.side_effect = ["olive", "application-only"]
-            mock_password.return_value.ask.return_value = "SECRET"
+            # git token first, then AWS secret
+            mock_password.return_value.ask.side_effect = ["ghp_testtoken", "SECRET"]
             mock_text.return_value.ask.return_value = "ACCESS_KEY"
 
             config = prompt_setup(state)
 
         assert config.edx_version == "olive"
         assert config.env_config == "application-only"
+        assert config.git_access_token == "ghp_testtoken"
 
     def test_ssh_key_not_found_prompts(self, tmp_path):
         """When SSH key was deleted after provisioning, user is prompted for key path."""
@@ -260,10 +268,12 @@ class TestPromptSetup:
 
         with (
             patch("questionary.select") as mock_select,
+            patch("questionary.password") as mock_password,
             patch("questionary.confirm") as mock_confirm,
             patch("questionary.path") as mock_path,
         ):
             mock_select.return_value.ask.side_effect = ["sumac", "single-server"]
+            mock_password.return_value.ask.return_value = "ghp_testtoken"
             mock_confirm.return_value.ask.return_value = True
             mock_path.return_value.ask.return_value = str(new_key)
 
@@ -283,10 +293,12 @@ class TestPromptSetup:
 
         with (
             patch("questionary.select") as mock_select,
+            patch("questionary.password") as mock_password,
             patch("questionary.confirm") as mock_confirm,
             patch("questionary.path") as mock_path,
         ):
             mock_select.return_value.ask.side_effect = ["sumac", "single-server"]
+            mock_password.return_value.ask.return_value = "ghp_testtoken"
             mock_confirm.return_value.ask.return_value = True
             mock_path.return_value.ask.return_value = str(key)
 
@@ -306,10 +318,12 @@ class TestPromptSetup:
 
         with (
             patch("questionary.select") as mock_select,
+            patch("questionary.password") as mock_password,
             patch("questionary.confirm") as mock_confirm,
             patch("questionary.path") as mock_path,
         ):
             mock_select.return_value.ask.side_effect = ["sumac", "single-server"]
+            mock_password.return_value.ask.return_value = "ghp_testtoken"
             mock_confirm.return_value.ask.return_value = True
             mock_path.return_value.ask.return_value = str(key)
 

@@ -86,6 +86,7 @@ def setup_config(tmp_path: Path) -> SetupConfig:
         aws_access_key_id="AKIAIOSFODNN7EXAMPLE",
         aws_secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
         aws_default_region="us-east-1",
+        git_access_token="ghp_testtoken123",
     )
 
 
