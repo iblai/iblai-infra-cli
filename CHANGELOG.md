@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.0] — 2026-03-10
+
+### Added
+- Full platform setup via Ansible — 8 roles: docker, awscli, python, ibl_cli_ops, ibl_platform, ibl_dm, ibl_edx, final_steps
+- DM and edX image tag prompts with defaults (`4.190.0-ai`, `sumac.2.4.13`); sets ECR image URIs before launch
+- `ibl_platform` role configures edX version, base domain, environment, and DM/edX container images
+- `ibl_dm` role runs `ibl dm launch` (timeout 1800s)
+- `ibl_edx` role runs `ibl edx launch` (timeout 3600s)
+- `final_steps` role runs `ibl config save`, `ibl global-proxy reload`, `ibl launch --ibl-oauth --ibl-oidc --ibl-edx-manager`, and `ibl dm auth-setup`
+- `dm_image_tag` and `edx_image_tag` fields on `SetupConfig` model
+
+### Changed
+- Simplified runner to single-phase Ansible execution (removed two-phase SSH/Fabric approach)
+- `_build_extra_vars()` now passes `base_domain`, `edx_version`, `env_config`, `dm_image_tag`, `edx_image_tag` to playbook
+- Removed `fabric` dependency — all remote execution handled by Ansible
+
+### Fixed
+- Tests updated to match runner rewrite — removed tests for deleted JSON-parsing methods, added tests for all 8 roles
+
 ## [0.5.0] — 2026-03-10
 
 ### Added

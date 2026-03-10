@@ -219,6 +219,8 @@ class SetupConfig(BaseModel):
     base_domain: str
     edx_version: str = "sumac"
     env_config: str = "single-server"
+    dm_image_tag: str
+    edx_image_tag: str
     aws_access_key_id: str
     aws_secret_access_key: str
     aws_default_region: str

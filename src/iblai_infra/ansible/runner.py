@@ -1,7 +1,7 @@
 """Ansible execution wrapper with Rich Live progress display.
 
-Runs ansible-playbook and parses its default stdout output for real-time
-role tracking, combined with Rich Live + Progress for visual feedback.
+Runs ansible-playbook with all roles (infrastructure + platform) and tracks
+progress via line-based output parsing of the default callback.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ ROLE_LABELS: dict[str, str] = {
     "ibl_platform": "Platform Config",
     "ibl_dm": "Manager (ibl-dm)",
     "ibl_edx": "Open edX (ibl-edx)",
+    "final_steps": "Final Steps",
 }
 
 TOTAL_ROLES = len(ROLE_LABELS)
@@ -45,7 +46,7 @@ _FATAL_RE = re.compile(r"^(fatal|FAILED!)", re.IGNORECASE)
 
 
 class AnsibleRunner:
-    """Manages Ansible workspace and playbook execution."""
+    """Manages Ansible workspace, playbook execution, and progress tracking."""
 
     def __init__(self, state: ProjectState, config: SetupConfig):
         self.state = state
@@ -71,120 +72,31 @@ class AnsibleRunner:
         ui.success(f"Ansible workspace ready  [muted]{self.ws}[/muted]")
 
     def run(self) -> bool:
-        """Run ansible-playbook with live progress. Returns True on success."""
-        from collections import deque
+        """Run ansible-playbook with all roles."""
         from datetime import datetime, timezone
 
         self.state.setup_status = "running"
         save_state(self.state)
 
         ui.newline()
-        roles: dict[str, dict] = {}
+
+        # Build step tracking
+        steps: dict[str, dict] = {}
         for name, label in ROLE_LABELS.items():
-            roles[name] = {"label": label, "status": "pending", "elapsed": 0}
+            steps[name] = {"label": label, "status": "pending", "elapsed": 0}
 
         completed = 0
-        errors: list[str] = []
-        output_tail: deque[str] = deque(maxlen=30)
-        current_role: str | None = None
-        role_start_time: float = 0
-
         progress = ui.make_overall_progress()
-        task_id = progress.add_task("Bootstrapping platform", total=TOTAL_ROLES)
+        task_id = progress.add_task("Setting up platform", total=TOTAL_ROLES)
 
-        extra_vars = self._build_extra_vars()
+        ok, completed = self._run_ansible(steps, progress, task_id, completed)
 
-        cmd = [
-            "ansible-playbook",
-            "playbook.yml",
-            "--extra-vars", json.dumps(extra_vars),
-        ]
+        self._print_final_table(steps)
 
-        env = self._env()
-
-        proc = subprocess.Popen(
-            cmd,
-            cwd=self.ws,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            env=env,
-        )
-
-        with Live(
-            self._build_display(roles, progress),
-            console=ui.console,
-            refresh_per_second=4,
-            transient=True,
-        ) as live:
-            for line in proc.stdout:
-                line = line.rstrip()
-
-                # Keep a rolling buffer of output for error reporting
-                if line:
-                    output_tail.append(line)
-
-                # Detect role from TASK lines
-                role_name = self._extract_role_from_line(line)
-                if role_name and role_name != current_role:
-                    # Mark previous role as complete
-                    if current_role and current_role in roles:
-                        roles[current_role]["status"] = "complete"
-                        roles[current_role]["elapsed"] = int(time.time() - role_start_time)
-                        completed += 1
-                        progress.update(task_id, completed=completed)
-
-                    current_role = role_name
-                    role_start_time = time.time()
-                    if role_name in roles:
-                        roles[role_name]["status"] = "in_progress"
-
-                # Detect failures
-                if _FATAL_RE.match(line):
-                    errors.append(line.strip())
-                    if current_role and current_role in roles:
-                        roles[current_role]["status"] = "error"
-
-                # Update elapsed time for current role
-                if current_role and current_role in roles and roles[current_role]["status"] == "in_progress":
-                    roles[current_role]["elapsed"] = int(time.time() - role_start_time)
-
-                live.update(self._build_display(roles, progress))
-
-            proc.wait()
-
-        # Mark last role as complete (if no errors)
-        if current_role and current_role in roles and roles[current_role]["status"] == "in_progress":
-            roles[current_role]["status"] = "complete"
-            roles[current_role]["elapsed"] = int(time.time() - role_start_time)
-            completed += 1
-            progress.update(task_id, completed=completed)
-
-        # Print final table
-        self._print_final_table(roles)
-
-        if proc.returncode != 0 or errors:
+        if not ok:
             self.state.setup_status = "failed"
             self.state.updated_at = datetime.now(timezone.utc)
             save_state(self.state)
-
-            if errors:
-                ui.error("Ansible reported the following errors:")
-                ui.newline()
-                for e in errors[:5]:
-                    ui.muted(f"  {e}")
-            else:
-                ui.error(f"ansible-playbook exited with code {proc.returncode}")
-
-            # Show recent output for context
-            if output_tail:
-                ui.newline()
-                ui.error("Last lines of output:")
-                ui.newline()
-                for tail_line in output_tail:
-                    ui.muted(f"  {tail_line}")
-
             ui.newline()
             ui.error("Setup failed. Fix the issue and re-run [brand]iblai infra setup[/brand]")
             ui.newline()
@@ -195,8 +107,109 @@ class AnsibleRunner:
         self.state.updated_at = datetime.now(timezone.utc)
         save_state(self.state)
 
-        ui.success(f"[highlight]{completed}[/highlight] of {TOTAL_ROLES} roles completed")
+        ui.success(f"[highlight]{completed}[/highlight] of {TOTAL_ROLES} steps completed")
         return True
+
+    # ------------------------------------------------------------------
+    # Ansible execution
+    # ------------------------------------------------------------------
+
+    def _run_ansible(
+        self,
+        steps: dict[str, dict],
+        progress: ui.Progress,
+        task_id: int,
+        completed: int,
+    ) -> tuple[bool, int]:
+        """Run ansible-playbook and track progress. Returns (success, completed)."""
+        from collections import deque
+
+        errors: list[str] = []
+        output_tail: deque[str] = deque(maxlen=30)
+        current_role: str | None = None
+        role_start_time: float = 0
+
+        extra_vars = self._build_extra_vars()
+
+        cmd = [
+            "ansible-playbook",
+            "playbook.yml",
+            "--extra-vars", json.dumps(extra_vars),
+        ]
+
+        proc = subprocess.Popen(
+            cmd,
+            cwd=self.ws,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=self._env(),
+        )
+
+        with Live(
+            self._build_display(steps, progress),
+            console=ui.console,
+            refresh_per_second=4,
+            transient=True,
+        ) as live:
+            for line in proc.stdout:
+                line = line.rstrip()
+
+                if line:
+                    output_tail.append(line)
+
+                role_name = self._extract_role_from_line(line)
+                if role_name and role_name != current_role:
+                    if current_role and current_role in steps:
+                        steps[current_role]["status"] = "complete"
+                        steps[current_role]["elapsed"] = int(time.time() - role_start_time)
+                        completed += 1
+                        progress.update(task_id, completed=completed)
+
+                    current_role = role_name
+                    role_start_time = time.time()
+                    if role_name in steps:
+                        steps[role_name]["status"] = "in_progress"
+
+                if _FATAL_RE.match(line):
+                    errors.append(line.strip())
+                    if current_role and current_role in steps:
+                        steps[current_role]["status"] = "error"
+
+                if current_role and current_role in steps and steps[current_role]["status"] == "in_progress":
+                    steps[current_role]["elapsed"] = int(time.time() - role_start_time)
+
+                live.update(self._build_display(steps, progress))
+
+            proc.wait()
+
+        # Mark last role complete
+        if current_role and current_role in steps and steps[current_role]["status"] == "in_progress":
+            steps[current_role]["status"] = "complete"
+            steps[current_role]["elapsed"] = int(time.time() - role_start_time)
+            completed += 1
+            progress.update(task_id, completed=completed)
+
+        if proc.returncode != 0 or errors:
+            if errors:
+                ui.error("Ansible reported the following errors:")
+                ui.newline()
+                for e in errors[:5]:
+                    ui.muted(f"  {e}")
+            else:
+                ui.error(f"ansible-playbook exited with code {proc.returncode}")
+
+            if output_tail:
+                ui.newline()
+                ui.error("Last lines of output:")
+                ui.newline()
+                for tail_line in output_tail:
+                    ui.muted(f"  {tail_line}")
+
+            return False, completed
+
+        return True, completed
 
     # ------------------------------------------------------------------
     # Pre-flight checks
@@ -239,7 +252,6 @@ class AnsibleRunner:
         ui.error(f"Cannot connect to [highlight]{self.config.target_host}[/highlight] via SSH")
         ui.newline()
 
-        # Diagnose common issues
         stderr = result.stderr.strip().lower() if result.stderr else ""
         if "permission denied" in stderr:
             ui.muted("  The SSH key may not match the key pair used during provisioning.")
@@ -267,7 +279,6 @@ class AnsibleRunner:
         if not template_dir.exists():
             ui.abort(f"Ansible template directory not found: {template_dir}")
 
-        # Clear previous ansible workspace if exists
         if self.ws.exists():
             shutil.rmtree(self.ws)
 
@@ -292,10 +303,12 @@ class AnsibleRunner:
             "aws_access_key_id": self.config.aws_access_key_id,
             "aws_secret_access_key": self.config.aws_secret_access_key,
             "aws_default_region": self.config.aws_default_region,
+            "git_access_token": self.config.git_access_token,
             "base_domain": self.config.base_domain,
             "edx_version": self.config.edx_version,
             "env_config": self.config.env_config,
-            "git_access_token": self.config.git_access_token,
+            "dm_image_tag": self.config.dm_image_tag,
+            "edx_image_tag": self.config.edx_image_tag,
         }
 
     # ------------------------------------------------------------------
@@ -304,12 +317,12 @@ class AnsibleRunner:
 
     def _build_display(
         self,
-        roles: dict[str, dict],
+        steps: dict[str, dict],
         progress: ui.Progress,
     ) -> Group:
-        table = self._build_role_table(roles)
+        table = self._build_role_table(steps)
         return Group(
-            ui.section_group("Bootstrapping Platform", table),
+            ui.section_group("Setting Up Platform", table),
             progress,
         )
 
@@ -345,14 +358,14 @@ class AnsibleRunner:
 
         return table
 
-    def _print_final_table(self, roles: dict[str, dict]) -> None:
-        if not roles:
+    def _print_final_table(self, steps: dict[str, dict]) -> None:
+        if not steps:
             return
-        table = self._build_role_table(roles)
+        table = self._build_role_table(steps)
         ui.section("Setup Results", table)
 
     # ------------------------------------------------------------------
-    # Line-based output parsing (default callback)
+    # Line-based output parsing (ansible default callback)
     # ------------------------------------------------------------------
 
     def _extract_role_from_line(self, line: str) -> str | None:
@@ -368,83 +381,17 @@ class AnsibleRunner:
 
         task_label = match.group(1)
 
-        # "role_name : task description" format
         if " : " in task_label:
             role_part = task_label.split(" : ", 1)[0].strip()
             if role_part in ROLE_LABELS:
                 return role_part
 
-        # Check if the task label contains a known role name
         label_lower = task_label.lower()
         for role_name in ROLE_LABELS:
             if role_name in label_lower:
                 return role_name
 
         return None
-
-    # ------------------------------------------------------------------
-    # JSON output parsing (kept for structured post-run analysis)
-    # ------------------------------------------------------------------
-
-    def _extract_role(self, event: dict) -> str | None:
-        """Extract the role name from an ansible JSON event."""
-        for key in ("play", "task"):
-            obj = event.get(key, {})
-            if isinstance(obj, dict):
-                role = obj.get("role", "")
-                if role and role in ROLE_LABELS:
-                    return role
-                name = obj.get("name", "")
-                for role_name in ROLE_LABELS:
-                    if role_name in name.lower():
-                        return role_name
-
-        for play in event.get("plays", []):
-            for task in play.get("tasks", []):
-                task_info = task.get("task", {})
-                role = task_info.get("role", "")
-                if role and role in ROLE_LABELS:
-                    return role
-
-        return None
-
-    def _is_failure(self, event: dict) -> bool:
-        """Check if an event represents a task failure."""
-        stats = event.get("stats", {})
-        for host_stats in stats.values():
-            if host_stats.get("failures", 0) > 0 or host_stats.get("unreachable", 0) > 0:
-                return True
-
-        for play in event.get("plays", []):
-            for task in play.get("tasks", []):
-                for host_result in task.get("hosts", {}).values():
-                    if host_result.get("failed", False) or host_result.get("unreachable", False):
-                        return True
-
-        return False
-
-    def _extract_error(self, event: dict) -> str:
-        """Extract error message from a failure event."""
-        for play in event.get("plays", []):
-            for task in play.get("tasks", []):
-                task_name = task.get("task", {}).get("name", "unknown task")
-                for host_result in task.get("hosts", {}).values():
-                    if host_result.get("failed") or host_result.get("unreachable"):
-                        msg = host_result.get("msg", "")
-                        stderr = host_result.get("stderr", "")
-                        detail = msg or stderr or "Unknown error"
-                        return f"{task_name}: {detail}"
-
-        stats = event.get("stats", {})
-        for host, host_stats in stats.items():
-            failures = host_stats.get("failures", 0)
-            unreachable = host_stats.get("unreachable", 0)
-            if failures > 0:
-                return f"{host}: {failures} task(s) failed"
-            if unreachable > 0:
-                return f"{host}: host unreachable"
-
-        return "Unknown error"
 
     # ------------------------------------------------------------------
     # Helpers
@@ -457,13 +404,3 @@ class AnsibleRunner:
         env["ANSIBLE_FORCE_COLOR"] = "false"
         env["ANSIBLE_CONFIG"] = str(self.ws / "ansible.cfg")
         return env
-
-    @staticmethod
-    def _parse_json_line(line: str) -> dict | None:
-        line = line.strip()
-        if not line:
-            return None
-        try:
-            return json.loads(line)
-        except json.JSONDecodeError:
-            return None

@@ -287,6 +287,8 @@ class TestSetupConfig:
             ssh_private_key_path=key,
             target_host="1.2.3.4",
             base_domain="example.com",
+            dm_image_tag="4.190.0-ai",
+            edx_image_tag="sumac.2.4.13",
             git_access_token="ghp_abc",
             aws_access_key_id="AK",
             aws_secret_access_key="SK",

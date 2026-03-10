@@ -118,6 +118,27 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
     env_config = "single-server"
     ui.success(f"Server type: [highlight]Single Server[/highlight]")
 
+    # Release image tags
+    dm_image_tag = questionary.text(
+        "DM release tag:",
+        default="4.190.0-ai",
+        style=ui.PROMPT_STYLE,
+    ).ask()
+    if dm_image_tag is None:
+        ui.abort()
+    dm_image_tag = dm_image_tag.strip()
+    ui.success(f"DM image tag: [highlight]{dm_image_tag}[/highlight]")
+
+    edx_image_tag = questionary.text(
+        "edX release tag:",
+        default="sumac.2.4.13",
+        style=ui.PROMPT_STYLE,
+    ).ask()
+    if edx_image_tag is None:
+        ui.abort()
+    edx_image_tag = edx_image_tag.strip()
+    ui.success(f"edX image tag: [highlight]{edx_image_tag}[/highlight]")
+
     # ----- Step 3: Credentials -----
     ui.step_header(3, TOTAL_STEPS, "Credentials")
 
@@ -180,6 +201,8 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
         base_domain=base_domain,
         edx_version=edx_version,
         env_config=env_config,
+        dm_image_tag=dm_image_tag,
+        edx_image_tag=edx_image_tag,
         aws_access_key_id=aws_key_id,
         aws_secret_access_key=aws_secret,
         aws_default_region=aws_region,

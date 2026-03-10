@@ -50,3 +50,29 @@
     executable: /bin/bash
   environment:
     HOME: "/home/{{ ansible_user }}"
+
+- name: Configure DM image
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    ibl config save --set IBL_DM.IBL_DM_IMAGE='765174860755.dkr.ecr.us-east-1.amazonaws.com/ibl-dm-pro:{{ dm_image_tag }}'
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+
+- name: Configure edX image
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    ibl config save --set IBL_EDX.IBL_EDX_IMAGE='765174860755.dkr.ecr.us-east-1.amazonaws.com/ibl-edx-pro:{{ edx_image_tag }}'
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ ansible_user }}"
