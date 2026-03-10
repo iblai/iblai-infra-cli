@@ -6,10 +6,22 @@
     export PATH="$PYENV_ROOT/bin:$PATH"
     eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
     pyenv activate "{{ venv_name }}"
-    ibl dm launch
+    ibl dm launch 2>&1
   args:
     executable: /bin/bash
     chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
   timeout: 1800
+  register: dm_launch_result
+  ignore_errors: true
+
+- name: Show ibl dm launch output on failure
+  debug:
+    var: dm_launch_result.stdout_lines
+  when: dm_launch_result.rc != 0
+
+- name: Fail if ibl dm launch failed
+  fail:
+    msg: "ibl dm launch failed with exit code {{ dm_launch_result.rc }}"
+  when: dm_launch_result.rc != 0

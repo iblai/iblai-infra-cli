@@ -6,10 +6,22 @@
     export PATH="$PYENV_ROOT/bin:$PATH"
     eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
     pyenv activate "{{ venv_name }}"
-    ibl edx launch
+    ibl edx launch 2>&1
   args:
     executable: /bin/bash
     chdir: "{{ repo_dir }}"
   environment:
     HOME: "/home/{{ ansible_user }}"
   timeout: 3600
+  register: edx_launch_result
+  ignore_errors: true
+
+- name: Show ibl edx launch output on failure
+  debug:
+    var: edx_launch_result.stdout_lines
+  when: edx_launch_result.rc != 0
+
+- name: Fail if ibl edx launch failed
+  fail:
+    msg: "ibl edx launch failed with exit code {{ edx_launch_result.rc }}"
+  when: edx_launch_result.rc != 0
