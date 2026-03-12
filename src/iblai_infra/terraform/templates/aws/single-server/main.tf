@@ -52,6 +52,7 @@ locals {
 
   # Certificate 1: API and core services
   certificate_domains_1 = [
+    "api.${var.base_domain}",
     "apps.learn.${var.base_domain}",
     "asgi.data.${var.base_domain}",
     "base.manager.${var.base_domain}",
@@ -59,17 +60,19 @@ locals {
     "llm.data.${var.base_domain}",
     "mentor.data.${var.base_domain}",
     "preview.learn.${var.base_domain}",
+    "web.data.${var.base_domain}",
   ]
 
-  # Certificate 2: Auth and monitoring services
+  # Certificate 2: Auth, monitoring, and SPA services
   certificate_domains_2 = [
     "studio.learn.${var.base_domain}",
-    "status.${var.base_domain}",
     "mentorai.${var.base_domain}",
     "meilisearch.learn.${var.base_domain}",
     "monitor.${var.base_domain}",
     "flowise.${var.base_domain}",
     "skillsai.${var.base_domain}",
+    "platform.${var.base_domain}",
+    "prometheus.${var.base_domain}",
   ]
 
   all_certificate_domains = concat(local.certificate_domains_1, local.certificate_domains_2)

@@ -1,0 +1,161 @@
+---
+- name: Generate SPA SSO client credentials
+  shell: |
+    python3 -c "
+    import string, random, base64
+    chars = string.ascii_letters + string.digits
+    cid = base64.b64encode(''.join(random.choice(chars) for _ in range(30)).encode()).decode()
+    sec = base64.b64encode(''.join(random.choice(chars) for _ in range(60)).encode()).decode()
+    print(cid)
+    print(sec)
+    "
+  register: spa_credentials
+  changed_when: false
+
+- name: Set SPA credential facts
+  set_fact:
+    spa_sso_client_id: "{{ spa_credentials.stdout_lines[0] | trim }}"
+    spa_sso_client_secret: "{{ spa_credentials.stdout_lines[1] | trim }}"
+
+- name: Wait for LMS to be ready
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    export TUTOR_PLUGINS_ROOT={{ ibl_root }}/app/ibl-edx/ibl-edx-plugins/
+    tutor --root {{ ibl_root }}/app/ibl-edx/ibl-edx-pro/ local exec lms echo "LMS ready"
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+  register: lms_ready
+  until: lms_ready.rc == 0
+  retries: 30
+  delay: 10
+
+- name: Create OAuth2 Application in edX for SPA SSO
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    export TUTOR_PLUGINS_ROOT={{ ibl_root }}/app/ibl-edx/ibl-edx-plugins/
+    tutor --root {{ ibl_root }}/app/ibl-edx/ibl-edx-pro/ local run lms ./manage.py lms shell -c \
+      'from oauth2_provider.models import Application; from django.contrib.auth.models import User; usr=User.objects.get(username="ibl_admin"); app, created = Application.objects.get_or_create(name="spa-sso", user=usr, defaults={"client_id": "{{ spa_sso_client_id }}", "client_secret": "{{ spa_sso_client_secret }}", "client_type": "confidential", "authorization_grant_type": "password", "redirect_uris": "https://web.{{ base_domain }}", "skip_authorization": True}); print(app.client_id)'
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+  register: oauth_app_result
+
+- name: Capture actual SPA SSO client ID from edX
+  set_fact:
+    spa_sso_client_id: "{{ oauth_app_result.stdout_lines | last | trim }}"
+  when:
+    - oauth_app_result.stdout_lines is defined
+    - oauth_app_result.stdout_lines | length > 0
+
+- name: Set SPA configuration defaults
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    ibl config save --set 'IBL_SPA.EDX_SSO_CLIENT_ID={{ spa_sso_client_id }}'
+    ibl config save --set 'IBL_SPA.AUTH.IBL_OAUTH2_CLIENT_ID={{ spa_sso_client_id }}'
+    ibl config save --set 'IBL_SPA.AUTH.DOMAIN=https://auth.{{ base_domain }}'
+    ibl config save --set 'IBL_SPA.AUTH.DOCKER_IMAGE_VERSION={{ spa_auth_image_tag }}'
+    ibl config save --set 'IBL_SPA.MENTOR.DOCKER_IMAGE_VERSION={{ spa_mentor_image_tag }}'
+    ibl config save --set 'IBL_SPA.MENTOR.IFRAME_MENTOR_DOMAIN=https://mentorai.{{ base_domain }}'
+    ibl config save --set 'IBL_SPA.MENTOR.DOMAIN=https://mentorai.{{ base_domain }}'
+    ibl config save --set 'IBL_SPA.MENTOR.ENABLE_RBAC=true'
+    ibl config save --set 'IBL_SPA.MENTOR.STRIPE_ENABLED=false'
+    ibl config save --set 'IBL_SPA.SKILLS.DOMAIN=skillsai.{{ base_domain }}'
+    ibl config save --set 'IBL_SPA.SKILLS.DOCKER_IMAGE_VERSION={{ spa_skills_image_tag }}'
+    ibl config save --set 'IBL_SPA.SKILLS.ENABLE_RBAC=true'
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+
+- name: Re-render templates with SPA configuration
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    ibl config save
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+
+- name: Login to ECR for SPA images
+  become: false
+  shell: |
+    aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 765174860755.dkr.ecr.us-east-1.amazonaws.com
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    AWS_ACCESS_KEY_ID: "{{ aws_access_key_id }}"
+    AWS_SECRET_ACCESS_KEY: "{{ aws_secret_access_key }}"
+    AWS_DEFAULT_REGION: "{{ aws_default_region }}"
+
+- name: Launch Auth SPA
+  become: false
+  shell: |
+    cd {{ ibl_root }}/app/ibl-spa/auth/ && docker compose pull && docker compose down && docker compose up -d
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+  register: auth_spa_result
+  retries: 2
+  delay: 5
+
+- name: Launch Mentor SPA
+  become: false
+  shell: |
+    cd {{ ibl_root }}/app/ibl-spa/mentor/ && docker compose pull && docker compose down && docker compose up -d
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+  register: mentor_spa_result
+  retries: 2
+  delay: 5
+
+- name: Launch Skills SPA
+  become: false
+  shell: |
+    cd {{ ibl_root }}/app/ibl-spa/skills/ && docker compose pull && docker compose down && docker compose up -d
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+  register: skills_spa_result
+  retries: 2
+  delay: 5
+
+- name: Verify SPA containers are running
+  command: docker ps --format "table {% raw %}{{.Names}}\t{{.Status}}{% endraw %}" --filter "name=spa"
+  register: spa_containers
+  changed_when: false
+
+- name: Display SPA status
+  debug:
+    msg: "{{ spa_containers.stdout_lines }}"

@@ -156,6 +156,40 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
     else:
         ui.success("AI features: [highlight]Disabled[/highlight]")
 
+    # SPA image tags
+    spa_auth_image_tag = questionary.text(
+        "Auth SPA release tag:",
+        default="1.3.2",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if spa_auth_image_tag is None:
+        ui.abort()
+    spa_auth_image_tag = spa_auth_image_tag.strip()
+    ui.success(f"Auth SPA image tag: [highlight]{spa_auth_image_tag}[/highlight]")
+
+    spa_mentor_image_tag = questionary.text(
+        "Mentor SPA release tag:",
+        default="0.1.10",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if spa_mentor_image_tag is None:
+        ui.abort()
+    spa_mentor_image_tag = spa_mentor_image_tag.strip()
+    ui.success(f"Mentor SPA image tag: [highlight]{spa_mentor_image_tag}[/highlight]")
+
+    spa_skills_image_tag = questionary.text(
+        "Skills SPA release tag:",
+        default="0.0.1",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if spa_skills_image_tag is None:
+        ui.abort()
+    spa_skills_image_tag = spa_skills_image_tag.strip()
+    ui.success(f"Skills SPA image tag: [highlight]{spa_skills_image_tag}[/highlight]")
+
     # ----- Step 3: Credentials -----
     ui.step_header(3, TOTAL_STEPS, "Credentials")
 
@@ -228,6 +262,9 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
         dm_image_tag=dm_image_tag,
         edx_image_tag=edx_image_tag,
         enable_ai=enable_ai,
+        spa_auth_image_tag=spa_auth_image_tag,
+        spa_mentor_image_tag=spa_mentor_image_tag,
+        spa_skills_image_tag=spa_skills_image_tag,
         aws_access_key_id=aws_key_id,
         aws_secret_access_key=aws_secret,
         aws_default_region=aws_region,

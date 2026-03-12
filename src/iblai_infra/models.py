@@ -82,16 +82,19 @@ IBL_SUBDOMAINS: list[str] = [
     "apps.learn.{domain}",
     "meilisearch.learn.{domain}",
     "api.data.{domain}",
+    "api.{domain}",
     "asgi.data.{domain}",
     "llm.data.{domain}",
     "mentor.data.{domain}",
+    "web.data.{domain}",
     "base.manager.{domain}",
     "auth.{domain}",
-    "status.{domain}",
     "mentorai.{domain}",
     "monitor.{domain}",
     "flowise.{domain}",
     "skillsai.{domain}",
+    "platform.{domain}",
+    "prometheus.{domain}",
 ]
 
 
@@ -222,6 +225,9 @@ class SetupConfig(BaseModel):
     dm_image_tag: str
     edx_image_tag: str
     enable_ai: bool = True
+    spa_auth_image_tag: str
+    spa_mentor_image_tag: str
+    spa_skills_image_tag: str
     aws_access_key_id: str
     aws_secret_access_key: str
     aws_default_region: str

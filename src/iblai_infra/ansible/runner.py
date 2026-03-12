@@ -34,6 +34,7 @@ ROLE_LABELS: dict[str, str] = {
     "ibl_platform": "Platform Config",
     "ibl_dm": "iblai-dm-pro",
     "ibl_edx": "iblai-edx-pro",
+    "ibl_spa": "SPA Services",
     "final_steps": "Final Steps",
 }
 
@@ -310,6 +311,9 @@ class AnsibleRunner:
             "dm_image_tag": self.config.dm_image_tag,
             "edx_image_tag": self.config.edx_image_tag,
             "enable_ai": self.config.enable_ai,
+            "spa_auth_image_tag": self.config.spa_auth_image_tag,
+            "spa_mentor_image_tag": self.config.spa_mentor_image_tag,
+            "spa_skills_image_tag": self.config.spa_skills_image_tag,
         }
 
     # ------------------------------------------------------------------

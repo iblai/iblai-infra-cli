@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.0] — 2026-03-12
+
+### Added
+- `ibl_spa` Ansible role — creates OAuth2 Application in edX for SPA SSO, sets SPA config defaults, authenticates Docker with ECR, and launches Auth, Mentor, and Skills SPA containers
+- SPA image tag prompts in setup wizard: Auth SPA (`1.3.2`), Mentor SPA (`0.1.10`), Skills SPA (`0.0.1`)
+- `spa_auth_image_tag`, `spa_mentor_image_tag`, `spa_skills_image_tag` fields on `SetupConfig` model
+- 3 new platform subdomains: `api.`, `platform.`, `prometheus.`
+- `web.data.` subdomain for SPA data API
+
+### Changed
+- Playbook now runs 9 roles: docker, awscli, python, ibl_cli_ops, ibl_platform, ibl_dm, ibl_edx, **ibl_spa**, final_steps
+- `_build_extra_vars()` passes SPA image tags to playbook
+- ACM certificate domain lists updated: cert 1 adds `api.` and `web.data.`; cert 2 adds `platform.` and `prometheus.`
+- `IBL_SUBDOMAINS` updated from 16 to 19 entries (added `api`, `web.data`, `platform`, `prometheus`; removed `status`)
+
 ## [0.6.3] — 2026-03-10
 
 ### Added
@@ -101,7 +116,7 @@
 - Three SSH key modes: generate Ed25519 keypair, provide existing public key, or use AWS key pair
 - SSH access restricted to user-provided VPN IP
 - S3 buckets for backups, media, and static files
-- 16 ibl.ai platform subdomain records (when using Route53)
+- 19 ibl.ai platform subdomain records (when using Route53)
 - Real-time Terraform progress with JSON event streaming and Rich Live display
 - `iblai infra provision` — interactive provisioning wizard
 - `iblai infra destroy` — destroy infrastructure with double-confirmation for production
