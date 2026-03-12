@@ -112,6 +112,25 @@
     HOME: "/home/{{ ansible_user }}"
     IBL_ROOT: "{{ ibl_root }}/"
 
+- name: Generate Langfuse secrets for AI
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    NEXTAUTH_SECRET=$(python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32)))")
+    SALT=$(python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32)))")
+    ibl config save --set "IBL_DM.LANGFUSE_NEXTAUTH_SECRET=${NEXTAUTH_SECRET}"
+    ibl config save --set "IBL_DM.LANGFUSE_SALT=${SALT}"
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+  when: enable_ai | bool
+
 - name: Login to ECR
   become: false
   shell: |
