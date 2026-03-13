@@ -1,7 +1,7 @@
 ---
 - name: Install prerequisites
   apt:
-    name: [ca-certificates, curl, gnupg, lsb-release, unzip, acl, git]
+    name: [ca-certificates, curl, gnupg, lsb-release, unzip, acl, git, apache2-utils]
     state: present
     update_cache: true
 
