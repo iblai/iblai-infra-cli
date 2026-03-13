@@ -12,24 +12,24 @@ flowchart TB
         P4 --> P5[Review & Confirm]
     end
 
-    subgraph TF["TERRAFORM (Phase 1: AWS Infrastructure)"]
-        P5 --> TF1[VPC + Subnets + IGW]
+    subgraph TF["Terraform (AWS Infrastructure)"]
+        P5 --> TF1[VPC + Subnets]
         TF1 --> TF2[Security Groups]
-        TF2 --> TF3[EC2 Instance - Ubuntu 22.04]
+        TF2 --> TF3[EC2 Instance]
         TF3 --> TF4[Application Load Balancer]
-        TF4 --> TF5[S3 Buckets - backups, media, static]
-        TF5 --> TF6[ACM Certificates + DNS Validation]
-        TF6 --> TF7[Route53 Records - 19 subdomains]
-        TF7 --> TF8[HTTPS Listener + TLS 1.2]
+        TF4 --> TF5[S3 Buckets]
+        TF5 --> TF6[ACM Certificates]
+        TF6 --> TF7[Route53 DNS Records]
+        TF7 --> TF8[HTTPS Listener]
     end
 
-    subgraph SETUP["iblai infra setup (Phase 2)"]
+    subgraph SETUP["Ansible (Platform Setup)"]
         TF8 --> S1[Setup Prompts]
-        S1 -->|SetupConfig| S2[SSH Verify]
-        S2 --> S3[AnsibleRunner]
+        S1 --> S2[SSH Verify]
+        S2 --> S3[Ansible Runner]
     end
 
-    subgraph ANSIBLE["ANSIBLE PLAYBOOK (9 Roles on EC2)"]
+    subgraph ANSIBLE["Ansible Playbook (9 Roles)"]
         S3 --> R1
 
         subgraph INFRA_ROLES["Infrastructure Roles"]
