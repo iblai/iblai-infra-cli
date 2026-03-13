@@ -1,6 +1,219 @@
 # iblai-infra-ops Architecture
 
-## Full Provisioning & Setup Flow
+## Single Server — AWS Infrastructure
+
+```mermaid
+flowchart TB
+    INTERNET[Internet] --> R53
+
+    subgraph AWS["AWS Cloud"]
+
+        subgraph R53_BLOCK["Route53"]
+            R53[Hosted Zone\n19 subdomain A records]
+        end
+
+        R53 --> ALB
+
+        subgraph VPC["VPC (10.0.0.0/16)"]
+
+            subgraph PUB1["Public Subnet 1 (AZ-a)"]
+                ALB[Application Load Balancer\nHTTP :80 → HTTPS redirect\nHTTPS :443 → Target Group\nTLS 1.2+ policy]
+            end
+
+            subgraph PUB2["Public Subnet 2 (AZ-b)"]
+                ALB_NODE[ALB Node]
+            end
+
+            ALB --> EC2
+
+            subgraph EC2_BLOCK["EC2 Instance (t3.2xlarge)"]
+                EC2[Ubuntu 22.04\n50GB gp3 encrypted]
+
+                subgraph DOCKER["Docker Containers"]
+                    RP[Reverse Proxy\nCaddy]
+
+                    subgraph EDX["iblai-edx-pro"]
+                        LMS[LMS]
+                        CMS[CMS]
+                        LMS_W[LMS Worker]
+                        CMS_W[CMS Worker]
+                        MYSQL[(MySQL)]
+                        REDIS_E[(Redis)]
+                        MONGO[(MongoDB)]
+                        ES[(Elasticsearch)]
+                    end
+
+                    subgraph DM["iblai-dm-pro"]
+                        WEB[Web]
+                        ASGI[ASGI]
+                        CELERY[Celery Worker]
+                        BEAT[Celery Beat]
+                        PG[(PostgreSQL)]
+                        REDIS_D[(Redis)]
+                    end
+
+                    subgraph SPA["iblai-web-frontend"]
+                        AUTH[Auth]
+                        MENTOR[Mentor]
+                        SKILLS[Skills]
+                    end
+                end
+            end
+
+            subgraph SG["Security Groups"]
+                SG_ALB[ALB SG\nHTTP/HTTPS from 0.0.0.0/0]
+                SG_EC2[EC2 SG\nSSH from VPN IP\nHTTP from ALB only]
+            end
+        end
+
+        subgraph ACM["ACM Certificates"]
+            CERT1[Certificate 1\napi.data, learn, studio.learn\napps.learn, preview.learn\nasgi.data, llm.data, mentor.data\napi, web.data, base.manager]
+            CERT2[Certificate 2\nauth, mentorai, skillsai\nmonitor, flowise, platform\nprometheus, studio.learn\nmeilisearch.learn]
+        end
+
+        ALB -.->|TLS termination| CERT1
+        ALB -.->|TLS termination| CERT2
+
+        subgraph S3["S3 Buckets"]
+            S3_BACKUP[Backups]
+            S3_MEDIA[DM Media]
+            S3_STATIC[DM Static\nPublic read]
+        end
+
+        EC2 -.-> S3
+
+    end
+
+    style AWS fill:#232f3e,color:#fff
+    style VPC fill:#1a472a,color:#fff
+    style PUB1 fill:#2d6a4f,color:#fff
+    style PUB2 fill:#2d6a4f,color:#fff
+    style EC2_BLOCK fill:#3a506b,color:#fff
+    style DOCKER fill:#1c2541,color:#fff
+    style EDX fill:#2ecc71,color:#fff
+    style DM fill:#3498db,color:#fff
+    style SPA fill:#9b59b6,color:#fff
+    style SG fill:#4a4e69,color:#fff
+    style ACM fill:#e07a5f,color:#fff
+    style S3 fill:#f2cc8f,color:#000
+    style R53_BLOCK fill:#45b7d1,color:#fff
+```
+
+## Multi Server — AWS Infrastructure
+
+```mermaid
+flowchart TB
+    INTERNET[Internet] --> R53
+
+    subgraph AWS["AWS Cloud"]
+
+        subgraph R53_BLOCK["Route53"]
+            R53[Hosted Zone\nSubdomain A records]
+        end
+
+        R53 --> ALB
+
+        subgraph VPC["VPC (10.0.0.0/16)"]
+
+            subgraph PUB1["Public Subnet 1 (AZ-a)"]
+                ALB[Application Load Balancer\nHTTPS :443 with TLS 1.2+]
+            end
+
+            subgraph PUB2["Public Subnet 2 (AZ-b)"]
+                ALB_NODE[ALB Node]
+            end
+
+            ALB --> APP_NODE
+            ALB --> APP_NODE_2
+
+            subgraph APP_SUBNET["Application Nodes"]
+
+                subgraph APP1["App Node 1 (EC2)"]
+                    APP_NODE[Ubuntu 22.04]
+                    subgraph APP1_DOCKER["Docker"]
+                        RP1[Reverse Proxy]
+                        LMS1[iblai-edx-pro\nLMS + CMS + Workers]
+                        DM1[iblai-dm-pro\nWeb + ASGI + Celery]
+                        SPA1[iblai-web-frontend\nAuth + Mentor + Skills]
+                    end
+                end
+
+                subgraph APP2["App Node 2 (EC2)"]
+                    APP_NODE_2[Ubuntu 22.04]
+                    subgraph APP2_DOCKER["Docker"]
+                        RP2[Reverse Proxy]
+                        LMS2[iblai-edx-pro\nLMS + CMS + Workers]
+                        DM2[iblai-dm-pro\nWeb + ASGI + Celery]
+                        SPA2[iblai-web-frontend\nAuth + Mentor + Skills]
+                    end
+                end
+
+            end
+
+            subgraph DATA_SUBNET["Data Nodes"]
+
+                subgraph DATA1["Data Node 1 (EC2)"]
+                    MYSQL[(MySQL\nPrimary)]
+                    PG[(PostgreSQL\nPrimary)]
+                    REDIS[(Redis)]
+                    MONGO[(MongoDB)]
+                    ES[(Elasticsearch)]
+                end
+
+                subgraph DATA2["Data Node 2 (EC2)"]
+                    MYSQL_R[(MySQL\nReplica)]
+                    PG_R[(PostgreSQL\nReplica)]
+                    REDIS_R[(Redis\nReplica)]
+                end
+
+            end
+
+            APP_NODE -.-> DATA1
+            APP_NODE_2 -.-> DATA1
+            DATA1 -.->|Replication| DATA2
+
+            subgraph SG["Security Groups"]
+                SG_ALB[ALB SG]
+                SG_APP[App SG\nHTTP from ALB\nSSH from VPN]
+                SG_DATA[Data SG\nDB ports from App SG only]
+            end
+        end
+
+        subgraph ACM["ACM Certificates"]
+            CERT1[Certificate 1]
+            CERT2[Certificate 2]
+        end
+
+        ALB -.-> CERT1
+        ALB -.-> CERT2
+
+        subgraph S3["S3 Buckets"]
+            S3_BACKUP[Backups]
+            S3_MEDIA[DM Media]
+            S3_STATIC[DM Static]
+        end
+
+        APP_NODE -.-> S3
+
+    end
+
+    style AWS fill:#232f3e,color:#fff
+    style VPC fill:#1a472a,color:#fff
+    style PUB1 fill:#2d6a4f,color:#fff
+    style PUB2 fill:#2d6a4f,color:#fff
+    style APP_SUBNET fill:#3a506b,color:#fff
+    style DATA_SUBNET fill:#4a4e69,color:#fff
+    style APP1 fill:#1c2541,color:#fff
+    style APP2 fill:#1c2541,color:#fff
+    style DATA1 fill:#2c2c54,color:#fff
+    style DATA2 fill:#2c2c54,color:#fff
+    style SG fill:#4a4e69,color:#fff
+    style ACM fill:#e07a5f,color:#fff
+    style S3 fill:#f2cc8f,color:#000
+    style R53_BLOCK fill:#45b7d1,color:#fff
+```
+
+## Provisioning & Setup Flow
 
 ```mermaid
 flowchart TB
@@ -60,7 +273,7 @@ flowchart TB
     style SERVICE_ROLES fill:#2c2c54,color:#fff
 ```
 
-## Containers Launched Per Role
+## Containers Per Role
 
 ```mermaid
 flowchart LR
@@ -112,51 +325,7 @@ flowchart LR
     style FINAL fill:#f39c12,color:#fff
 ```
 
-## Network & DNS Architecture
-
-```mermaid
-flowchart TB
-    USER[User Browser] --> ALB[AWS Application Load Balancer]
-
-    ALB --> |learn| LMS
-    ALB --> |studio.learn| CMS
-    ALB --> |api.data / web.data| DM_WEB[iblai-dm-pro]
-    ALB --> |auth| AUTH[Auth SPA]
-    ALB --> |mentorai| MENTOR[Mentor SPA]
-    ALB --> |skillsai| SKILLS[Skills SPA]
-    ALB --> |monitor| MONITOR[Monitoring]
-    ALB --> |prometheus| PROM[Prometheus]
-    ALB --> |flowise| FLOWISE[Flowise]
-
-    subgraph EC2["EC2 Instance"]
-        RP[Reverse Proxy] --> LMS[iblai-edx-pro LMS]
-        RP --> CMS[iblai-edx-pro CMS]
-        RP --> DM_WEB
-        RP --> AUTH
-        RP --> MENTOR
-        RP --> SKILLS
-        RP --> MONITOR
-        RP --> PROM
-        RP --> FLOWISE
-    end
-
-    subgraph CERT1["ACM Certificate 1"]
-        C1["learn, studio.learn, apps.learn\nmeilisearch.learn, preview.learn\napi.data, asgi.data, llm.data\nmentor.data, api, web.data"]
-    end
-
-    subgraph CERT2["ACM Certificate 2"]
-        C2["base.manager, auth, mentorai\nskillsai, monitor, flowise\nplatform, prometheus"]
-    end
-
-    ALB -.-> CERT1
-    ALB -.-> CERT2
-
-    style ALB fill:#ff6b6b,color:#fff
-    style EC2 fill:#4ecdc4,color:#fff
-    style CERTS fill:#45b7d1,color:#fff
-```
-
-## Render This Diagram
+## Render These Diagrams
 
 ```bash
 # Using mermaid-cli
