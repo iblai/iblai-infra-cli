@@ -17,15 +17,18 @@
     spa_sso_client_id: "{{ spa_credentials.stdout_lines[0] | trim }}"
     spa_sso_client_secret: "{{ spa_credentials.stdout_lines[1] | trim }}"
 
-- name: Wait for LMS to be ready
+- name: Wait for LMS to be ready and stable
   become: false
-  shell: docker exec ibl_prod_lms echo "LMS ready"
+  shell: |
+    docker inspect --format='{{ '{{' }}.State.Running{{ '}}' }}' ibl_prod_lms 2>/dev/null | grep -q true && \
+    docker inspect --format='{{ '{{' }}.State.Restarting{{ '}}' }}' ibl_prod_lms 2>/dev/null | grep -q false && \
+    docker exec ibl_prod_lms echo "LMS ready"
   args:
     executable: /bin/bash
   register: lms_ready
   until: lms_ready.rc == 0
-  retries: 30
-  delay: 10
+  retries: 60
+  delay: 15
 
 - name: Create OAuth2 Application in edX for SPA SSO
   become: false
@@ -36,8 +39,8 @@
     executable: /bin/bash
   register: oauth_app_result
   until: oauth_app_result.rc == 0
-  retries: 5
-  delay: 15
+  retries: 10
+  delay: 30
 
 - name: Capture actual SPA SSO client ID from edX
   set_fact:
