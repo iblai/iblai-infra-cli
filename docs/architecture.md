@@ -33,9 +33,9 @@ flowchart TB
         S3 --> R1
 
         subgraph INFRA_ROLES["Infrastructure Roles"]
-            R1["1. Docker"]
-            R1 --> R2["2. AWS CLI"]
-            R2 --> R3["3. Python"]
+            R1["1. Docker Engine"]
+            R1 --> R2["2. AWS CLI Setup"]
+            R2 --> R3["3. Python Virtual Env"]
             R3 --> R4["4. iblai-cli-ops"]
         end
 
