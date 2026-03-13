@@ -113,7 +113,7 @@
     pyenv activate "{{ venv_name }}"
     ibl config save --set 'IBL_EDX.DOCKER_IMAGE_CADDY=docker.io/caddy:2.11.1'
     ibl config save --set 'IBL_EDX.DOCKER_IMAGE_SMTP=docker.io/devture/exim-relay:4.96-r1-1'
-    ibl config save --set 'IBL_EDX.DOCKER_IMAGE_MYSQL=docker.io/mysql:8.4.0'
+    ibl config save --set 'IBL_EDX.DOCKER_IMAGE_MYSQL=docker.io/mysql:8.0.40'
     ibl config save --set 'IBL_EDX.DOCKER_IMAGE_REDIS=docker.io/redis:7.2.4'
     ibl config save --set 'IBL_EDX.DOCKER_IMAGE_MONGODB=docker.io/mongo:7.0.7'
     ibl config save --set 'IBL_EDX.DOCKER_IMAGE_ELASTICSEARCH=docker.io/elasticsearch:7.17.9'
