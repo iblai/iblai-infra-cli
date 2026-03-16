@@ -127,17 +127,17 @@ iblai infra setup <project-name>
 
 This runs an Ansible playbook with 9 sequential roles:
 
-| Order | Role | What it does |
-|-------|------|-------------|
-| 1 | `docker` | Installs Docker Engine, docker compose, and apache2-utils |
-| 2 | `awscli` | Installs AWS CLI v2 for ECR and S3 access |
-| 3 | `python` | Installs pyenv and Python 3.11.8 |
-| 4 | `ibl_cli_ops` | Clones and installs [iblai-cli-ops](https://github.com/iblai/ibl-cli-ops) in a virtualenv |
-| 5 | `ibl_platform` | Configures base domain, environment, image tags, and service defaults |
-| 6 | `ibl_dm` | Launches iblai-dm-pro (PostgreSQL, Redis, Django, Celery, Flowise) |
-| 7 | `ibl_edx` | Launches iblai-edx-pro (LMS, CMS, MySQL, MongoDB, Redis, Elasticsearch) |
-| 8 | `ibl_spa` | Configures OAuth2 SSO and launches iblai-web-frontend (Auth, Mentor AI, Skills AI) |
-| 9 | `final_steps` | Reloads proxy, sets up OAuth/OIDC integrations, runs DM auth setup |
+| Role | What it does |
+|------|-------------|
+| `docker` | Installs Docker Engine, docker compose, and apache2-utils |
+| `awscli` | Installs AWS CLI v2 for ECR and S3 access |
+| `python` | Installs pyenv and Python 3.11.8 |
+| `iblai_cli_ops` | Clones and installs [iblai-cli-ops](https://github.com/iblai/ibl-cli-ops) in a virtualenv |
+| `base_config` | Configures base domain, environment, image tags, and service defaults |
+| `iblai_dm_pro` | Launches iblai-dm-pro (PostgreSQL, Redis, Django, Celery, Flowise) |
+| `iblai_edx_pro` | Launches iblai-edx-pro (LMS, CMS, MySQL, MongoDB, Redis, Elasticsearch) |
+| `iblai_spa` | Configures OAuth2 SSO and launches iblai-web-frontend (Auth, Mentor AI, Skills AI) |
+| `auth_config` | Reloads proxy, sets up OAuth/OIDC integrations, runs DM auth setup |
 
 The setup wizard prompts for:
 - Target host IP and SSH key path
