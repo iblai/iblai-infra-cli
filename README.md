@@ -1,6 +1,19 @@
-# iblai-infra-ops
+<div align="center">
+
+<a href="https://ibl.ai"><img src="https://ibl.ai/images/iblai-logo.png" alt="ibl.ai" width="300"></a>
+
+# Infra CLI
 
 Interactive CLI for provisioning and configuring the [ibl.ai](https://ibl.ai) platform on AWS. Handles end-to-end infrastructure creation with Terraform and full application setup with Ansible.
+
+[![AWS](https://img.shields.io/badge/AWS-FF9900?logo=amazonaws&logoColor=white)](https://aws.amazon.com)
+[![Terraform](https://img.shields.io/badge/Terraform-7B42BC?logo=terraform&logoColor=white)](https://www.terraform.io)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org)
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-blue.svg)](#license)
+
+</div>
+
+---
 
 ## Prerequisites
 
@@ -152,6 +165,20 @@ Supported methods:
 - **Manual entry** -- access key + secret key (masked input)
 
 Your session is saved after authentication and reused across commands until you switch credentials or it expires.
+
+## Architecture
+
+### AWS Single Server
+
+<div align="center">
+<img src="https://ibl.ai/architecture/aws-single.png" alt="AWS Single Server Architecture" width="800">
+</div>
+
+### AWS Multi Server
+
+<div align="center">
+<img src="https://ibl.ai/architecture/aws-multi.png" alt="AWS Multi Server Architecture" width="800">
+</div>
 
 ## What gets created
 
