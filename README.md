@@ -1,98 +1,184 @@
-# iblai-infra
+# iblai-infra-ops
 
-Interactive CLI for provisioning [ibl.ai](https://ibl.ai) platform infrastructure on AWS.
+Interactive CLI for provisioning and configuring the [ibl.ai](https://ibl.ai) platform on AWS. Handles end-to-end infrastructure creation with Terraform and full application setup with Ansible.
 
-## Requirements
+## Prerequisites
 
-- Python 3.11+
-- [Terraform](https://developer.hashicorp.com/terraform/install) installed and on PATH
-- AWS account with appropriate permissions
+- **Python 3.11+**
+- **[uv](https://docs.astral.sh/uv/)** (recommended) or pip
+- **[Terraform](https://developer.hashicorp.com/terraform/install)** installed and on PATH
+- **AWS account** with EC2, ELB, S3, ACM, Route53, IAM, and STS permissions
+- **SSH access** to the target EC2 instance (key is generated or provided during provisioning)
+
+### Dependencies installed automatically
+
+The following are installed as Python package dependencies when you install iblai-infra-ops:
+
+- **ansible-core** (>= 2.15) -- used by `iblai infra setup` to configure the server
+- **boto3** -- AWS SDK for authentication and resource management
+- **terraform** -- called as a subprocess (must be installed separately, see above)
+
+### What the Ansible setup installs on the target server
+
+The setup phase installs and configures the following on the provisioned EC2 instance:
+
+- **[iblai-cli-ops](https://github.com/iblai/ibl-cli-ops)** -- the IBL platform management CLI, cloned and installed inside a pyenv virtualenv on the server. This is a required dependency for all service launches.
+- **Docker Engine** with docker compose
+- **pyenv** with Python 3.11.8
+- **AWS CLI v2** for ECR authentication and S3 access
 
 ## Install
 
+Using [uv](https://docs.astral.sh/uv/) (recommended):
+
 ```bash
+# Install uv if you don't have it
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone the repo
+git clone git@github.com:iblai/iblai-infra-ops.git
+cd iblai-infra-ops
+
+# Create a virtual environment and install
+uv venv
+source .venv/bin/activate
 uv pip install .
 ```
 
-Or for development:
+For development:
 
 ```bash
-uv pip install -e .
+uv pip install -e ".[dev]"
+```
+
+Using pip:
+
+```bash
+pip install .
+```
+
+### Verify installation
+
+```bash
+iblai --version
+```
+
+Verify Ansible is available (installed as a dependency):
+
+```bash
+ansible-playbook --version
+```
+
+Verify Terraform is installed:
+
+```bash
+terraform --version
 ```
 
 ## Usage
 
 Run `iblai infra` to see all available commands and a getting-started guide.
 
-### Authentication
+### 1. Check IAM permissions
 
-The CLI always lets you choose how to authenticate — it never silently auto-detects credentials. On first use, it walks you through authentication interactively.
-
-The tool supports:
-- **AWS profiles** from `~/.aws/config` and `~/.aws/credentials` (type to filter)
-- **Environment variables** (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`)
-- **Manual entry** — access key + secret key (masked input)
-
-Your session is saved after authentication and reused across all subsequent commands until you switch credentials or the session expires.
-
-### Switch credentials
+Before provisioning, verify your AWS credentials have the required permissions:
 
 ```bash
-iblai infra auth
+iblai infra permissions              # Show required IAM policy JSON
+iblai infra permissions --check      # Dry-run verification against active credentials
 ```
 
-Clears the saved session and re-prompts for authentication. Use this to switch AWS profiles or accounts.
-
-### Check IAM permissions
-
-```bash
-iblai infra permissions              # Show required IAM policy
-iblai infra permissions --check      # Verify your credentials have the right permissions
-iblai infra permissions --check --profile myprofile --region eu-west-1
-```
-
-### Provision infrastructure
+### 2. Provision infrastructure
 
 ```bash
 iblai infra provision
 ```
 
-Launches an interactive wizard that walks you through:
+Interactive wizard that walks you through:
 
-1. **AWS credentials** — profile, access keys, or environment variables
-2. **Project & compute** — name, environment (dev/staging/prod), instance type, volume size
-3. **Network & SSH** — VPC CIDR, VPN IP for SSH access, SSH key setup
-4. **Domain & certificates** — base domain, Route53 integration, certificate method (ACM, upload, or none)
-5. **Review** — full summary before proceeding
+1. **AWS credentials** -- profile, access keys, or environment variables
+2. **Project & compute** -- name, environment (dev/staging/prod), instance type, volume size
+3. **Network & SSH** -- VPC CIDR, VPN IP for SSH access, SSH key setup
+4. **Domain & certificates** -- base domain, Route53 integration, certificate method (ACM, upload, or none)
+5. **Review** -- full summary before applying
 
 Terraform runs with real-time progress showing each resource as it's created.
 
-### List environments
+### 3. Setup the platform
+
+After provisioning, configure the server and deploy all services:
 
 ```bash
-iblai infra list
+iblai infra setup <project-name>
 ```
 
-### Check status
+This runs an Ansible playbook with 9 sequential roles:
+
+| Order | Role | What it does |
+|-------|------|-------------|
+| 1 | `docker` | Installs Docker Engine, docker compose, and apache2-utils |
+| 2 | `awscli` | Installs AWS CLI v2 for ECR and S3 access |
+| 3 | `python` | Installs pyenv and Python 3.11.8 |
+| 4 | `ibl_cli_ops` | Clones and installs [iblai-cli-ops](https://github.com/iblai/ibl-cli-ops) in a virtualenv |
+| 5 | `ibl_platform` | Configures base domain, environment, image tags, and service defaults |
+| 6 | `ibl_dm` | Launches iblai-dm-pro (PostgreSQL, Redis, Django, Celery, Flowise) |
+| 7 | `ibl_edx` | Launches iblai-edx-pro (LMS, CMS, MySQL, MongoDB, Redis, Elasticsearch) |
+| 8 | `ibl_spa` | Configures OAuth2 SSO and launches iblai-web-frontend (Auth, Mentor AI, Skills AI) |
+| 9 | `final_steps` | Reloads proxy, sets up OAuth/OIDC integrations, runs DM auth setup |
+
+The setup wizard prompts for:
+- Target host IP and SSH key path
+- Base domain and environment config
+- DM and edX Docker image tags
+- SPA image tags (Auth, Mentor, Skills)
+- Whether to enable AI features
+
+### 4. Manage environments
 
 ```bash
-iblai infra status <name>
+iblai infra list                # List all managed environments
+iblai infra status <name>       # Show infrastructure details and outputs
+iblai infra auth                # Switch AWS credentials
+iblai infra destroy <name>      # Tear down infrastructure (with confirmation)
 ```
 
-Shows infrastructure details, workspace location, and Terraform outputs.
+## Authentication
 
-### Destroy infrastructure
+The CLI always lets you choose how to authenticate -- it never silently auto-detects credentials. On first use, it walks you through authentication interactively.
 
-```bash
-iblai infra destroy <name>
+Supported methods:
+- **AWS profiles** from `~/.aws/config` and `~/.aws/credentials` (type to filter)
+- **Environment variables** (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`)
+- **Manual entry** -- access key + secret key (masked input)
+
+Your session is saved after authentication and reused across commands until you switch credentials or it expires.
+
+## What gets created
+
+### AWS Infrastructure (Terraform)
+
+- VPC with 2 public subnets across availability zones (10.0.0.0/16)
+- EC2 instance (Ubuntu 22.04) with encrypted EBS volume (AES-256)
+- Application Load Balancer with TLS 1.2/1.3 termination
+- ACM certificates (RSA 2048-bit, DNS-validated, auto-renewed)
+- Security groups (SSH restricted to VPN CIDR, HTTP/HTTPS from ALB only)
+- 3 S3 buckets with server-side encryption (backups, media, static)
+- Route53 hosted zone with 19 subdomain A-records
+
+### Platform Services (Ansible)
+
+- **iblai-edx-pro** -- LMS, CMS, workers, MySQL 8.0, Redis, MongoDB, Elasticsearch, Forum, Notes, Meilisearch, SMTP relay, Caddy
+- **iblai-dm-pro** -- Django web, ASGI, Celery worker/beat, PostgreSQL 16, Redis, Flowise AI
+- **iblai-web-frontend** -- Auth, Mentor AI, Skills AI single-page applications
+- **Monitoring** -- Prometheus, Grafana, AlertManager, metric exporters
+- **Nginx** reverse proxy
+
+## Workspace
+
+All Terraform state, SSH keys, and project configuration are stored at:
+
 ```
-
-Prompts for confirmation. Production environments require typing the project name to confirm.
-
-### Version
-
-```bash
-iblai --version
+~/.iblai-infra/projects/<project-name>/
 ```
 
 ## Development
@@ -110,24 +196,28 @@ With coverage:
 uv run pytest tests/ --cov=iblai_infra --cov-report=term-missing
 ```
 
-## What gets created
-
-- VPC with 2 public subnets (multi-AZ)
-- EC2 instance (Ubuntu 22.04) with Docker pre-installed
-- Application Load Balancer (internet-facing)
-- Security groups (SSH restricted to your VPN IP)
-- 3 S3 buckets (backups, media, static)
-- SSL certificates and DNS records (if using Route53)
-- SSH key pair (if generating new)
-
-## Workspace
-
-All Terraform files and state are stored at:
+### Project structure
 
 ```
-~/.iblai-infra/projects/<project-name>/
+iblai-infra-ops/
+├── src/iblai_infra/
+│   ├── cli.py                  # Typer CLI commands
+│   ├── app.py                  # Application logic
+│   ├── models.py               # Pydantic models
+│   ├── ui.py                   # Rich terminal UI
+│   ├── prompts/                # Interactive questionary prompts
+│   ├── providers/              # AWS provider (STS, EC2, S3)
+│   ├── terraform/              # Terraform runner and templates
+│   │   └── templates/aws/single-server/
+│   └── ansible/                # Ansible runner and templates
+│       └── templates/single-server/
+│           ├── playbook.yml
+│           └── roles/          # 9 Ansible roles
+├── tests/                      # 380+ tests
+├── docs/                       # Architecture diagrams
+└── pyproject.toml
 ```
 
 ## License
 
-Proprietary — ibl.ai
+Proprietary -- ibl.ai
