@@ -247,12 +247,61 @@ def _run_retry(name: str) -> None:
     ui.info(f"Workspace: [highlight]{ws}[/highlight]")
     ui.newline()
 
-    # Reuse the existing workspace — re-copy templates to pick up any fixes,
-    # then re-run init/plan/apply. tfvars are regenerated from the saved config.
+    # Clean up conflicting CNAME records if using Route53
+    if state.config.dns.use_route53 and state.config.dns.hosted_zone_id:
+        from iblai_infra.models import IBL_SUBDOMAINS
+        from iblai_infra.providers.aws import (
+            delete_route53_records,
+            find_conflicting_records,
+            get_session,
+        )
+        from rich.status import Status
+
+        session = get_session(state.config.credentials)
+        subdomains = [s.format(domain=state.config.dns.base_domain) for s in IBL_SUBDOMAINS]
+
+        with Status("  [info]Checking for conflicting DNS records...[/info]", console=ui.console):
+            conflicts = find_conflicting_records(
+                session, state.config.dns.hosted_zone_id, subdomains,
+            )
+
+        if conflicts:
+            import questionary
+
+            ui.warning(
+                f"Found {len(conflicts)} existing CNAME record(s) blocking A record creation:"
+            )
+            for c in conflicts:
+                values = [rr["Value"] for rr in c.get("ResourceRecords", [])]
+                ui.muted(f"  CNAME  {c['Name'].rstrip('.')}  →  {', '.join(values)}")
+
+            ui.newline()
+            delete_confirm = questionary.confirm(
+                "Delete these conflicting CNAME records to proceed?",
+                default=True,
+                style=ui.PROMPT_STYLE,
+                qmark=ui.QMARK,
+            ).ask()
+            if not delete_confirm:
+                ui.abort("Retry cancelled — no DNS changes made.")
+
+            with Status("  [info]Removing conflicting CNAME records...[/info]", console=ui.console):
+                delete_route53_records(
+                    session, state.config.dns.hosted_zone_id, conflicts,
+                )
+            ui.success(f"Removed {len(conflicts)} conflicting CNAME record(s)")
+        else:
+            ui.success("No conflicting DNS records found")
+
+        ui.newline()
+
+    # Reuse the existing workspace — re-copy .tf templates to pick up any fixes,
+    # but preserve the existing terraform.tfvars (avoids re-generating bucket names).
     runner = TerraformRunner(state.config)
     runner.ws = ws
     runner.state = state
-    runner.setup()
+    runner._copy_templates()
+    ui.success(f"Templates updated  [muted]{ws}[/muted]")
 
     runner.init()
     add_count = runner.plan()

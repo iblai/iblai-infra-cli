@@ -154,6 +154,45 @@ def list_key_pairs(session: boto3.Session) -> list[KeyPairInfo]:
         return []
 
 
+def find_conflicting_records(
+    session: boto3.Session,
+    zone_id: str,
+    subdomains: list[str],
+) -> list[dict]:
+    """Find existing CNAME records that conflict with the subdomains we want to create as A records."""
+    r53 = session.client("route53")
+    conflicts = []
+    # Normalize subdomain names for comparison
+    target_names = {f"{sd.rstrip('.')}." for sd in subdomains}
+
+    paginator = r53.get_paginator("list_resource_record_sets")
+    for page in paginator.paginate(HostedZoneId=zone_id):
+        for rrs in page["ResourceRecordSets"]:
+            if rrs["Name"] in target_names and rrs["Type"] == "CNAME":
+                conflicts.append(rrs)
+    return conflicts
+
+
+def delete_route53_records(
+    session: boto3.Session,
+    zone_id: str,
+    records: list[dict],
+) -> None:
+    """Delete the given Route53 resource record sets."""
+    r53 = session.client("route53")
+    changes = [
+        {"Action": "DELETE", "ResourceRecordSet": rrs}
+        for rrs in records
+    ]
+    # Route53 allows max 1000 changes per batch
+    for i in range(0, len(changes), 500):
+        batch = changes[i : i + 500]
+        r53.change_resource_record_sets(
+            HostedZoneId=zone_id,
+            ChangeBatch={"Changes": batch},
+        )
+
+
 def check_bucket_exists(session: boto3.Session, bucket_name: str) -> bool:
     """Check if an S3 bucket name is already taken (globally)."""
     try:

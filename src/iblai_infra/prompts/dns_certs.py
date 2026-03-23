@@ -14,7 +14,12 @@ from iblai_infra.models import (
     DNSConfig,
     IBL_SUBDOMAINS,
 )
-from iblai_infra.providers.aws import get_session, list_hosted_zones
+from iblai_infra.providers.aws import (
+    delete_route53_records,
+    find_conflicting_records,
+    get_session,
+    list_hosted_zones,
+)
 
 TOTAL_STEPS = 5
 
@@ -126,14 +131,43 @@ def prompt_dns_and_certs(credentials: AWSCredentials) -> tuple[DNSConfig, Certif
         for sd in subdomains:
             ui.muted(f"  {sd}")
 
+        # Check for conflicting CNAME records that would block A record creation
         ui.newline()
-        ui.warning(
-            "If any of these records already exist in the hosted zone "
-            "(A, CNAME, or other types), they will be replaced."
-        )
+        from rich.status import Status
+        with Status("  [info]Checking for conflicting DNS records...[/info]", console=ui.console):
+            conflicts = find_conflicting_records(session, hosted_zone_id, subdomains)
+
+        if conflicts:
+            ui.warning(
+                f"Found {len(conflicts)} existing CNAME record(s) that conflict with the "
+                "A records Terraform will create:"
+            )
+            for c in conflicts:
+                values = [rr["Value"] for rr in c.get("ResourceRecords", [])]
+                ui.muted(f"  CNAME  {c['Name'].rstrip('.')}  →  {', '.join(values)}")
+
+            ui.newline()
+            ui.warning(
+                "These CNAME records must be deleted before A records can be created. "
+                "DNS does not allow both types for the same name."
+            )
+            delete_confirm = questionary.confirm(
+                "Delete these conflicting CNAME records and proceed?",
+                default=True,
+                style=ui.PROMPT_STYLE,
+                qmark=ui.QMARK,
+            ).ask()
+            if not delete_confirm:
+                ui.abort("Aborted — no DNS changes made.")
+
+            with Status("  [info]Removing conflicting CNAME records...[/info]", console=ui.console):
+                delete_route53_records(session, hosted_zone_id, conflicts)
+            ui.success(f"Removed {len(conflicts)} conflicting CNAME record(s)")
+        else:
+            ui.success("No conflicting DNS records found")
 
         confirm_dns = questionary.confirm(
-            "Proceed with these DNS records?",
+            "Proceed with creating these DNS records?",
             default=True,
             style=ui.PROMPT_STYLE,
             qmark=ui.QMARK,
