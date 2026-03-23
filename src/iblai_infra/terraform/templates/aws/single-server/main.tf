@@ -381,11 +381,12 @@ resource "aws_route53_record" "cert_validation_1" {
     }
   } : {}
 
-  zone_id = data.aws_route53_zone.main[0].zone_id
-  name    = each.value.name
-  type    = each.value.type
-  records = [each.value.record]
-  ttl     = 60
+  allow_overwrite = true
+  zone_id         = data.aws_route53_zone.main[0].zone_id
+  name            = each.value.name
+  type            = each.value.type
+  records         = [each.value.record]
+  ttl             = 60
 }
 
 resource "aws_route53_record" "cert_validation_2" {
@@ -397,11 +398,12 @@ resource "aws_route53_record" "cert_validation_2" {
     }
   } : {}
 
-  zone_id = data.aws_route53_zone.main[0].zone_id
-  name    = each.value.name
-  type    = each.value.type
-  records = [each.value.record]
-  ttl     = 60
+  allow_overwrite = true
+  zone_id         = data.aws_route53_zone.main[0].zone_id
+  name            = each.value.name
+  type            = each.value.type
+  records         = [each.value.record]
+  ttl             = 60
 }
 
 resource "aws_acm_certificate_validation" "main_1" {
@@ -429,9 +431,10 @@ resource "aws_route53_record" "app" {
     local.all_certificate_domains
   )) : toset([])
 
-  zone_id = data.aws_route53_zone.main[0].zone_id
-  name    = each.value
-  type    = "A"
+  allow_overwrite = true
+  zone_id         = data.aws_route53_zone.main[0].zone_id
+  name            = each.value
+  type            = "A"
 
   alias {
     name                   = aws_lb.main.dns_name
