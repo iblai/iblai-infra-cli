@@ -122,9 +122,24 @@ def prompt_dns_and_certs(credentials: AWSCredentials) -> tuple[DNSConfig, Certif
         # Show subdomains that will be created
         subdomains = [s.format(domain=base_domain) for s in IBL_SUBDOMAINS]
         ui.newline()
-        ui.info("The following DNS records and certificates will be created:")
+        ui.info("The following DNS A-records will be created (aliased to the ALB):")
         for sd in subdomains:
             ui.muted(f"  {sd}")
+
+        ui.newline()
+        ui.warning(
+            "If any of these records already exist in the hosted zone "
+            "(A, CNAME, or other types), they will be replaced."
+        )
+
+        confirm_dns = questionary.confirm(
+            "Proceed with these DNS records?",
+            default=True,
+            style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
+        ).ask()
+        if not confirm_dns:
+            ui.abort("Aborted — no DNS records will be created.")
 
         cert_config = CertificateConfig(
             method=CertMethod.ACM,
