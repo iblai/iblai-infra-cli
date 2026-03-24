@@ -43,3 +43,21 @@
   environment:
     HOME: "/home/{{ ansible_user }}"
   when: openai_api_key | length > 0
+
+- name: Enable main platform to use main LLM key
+  become: false
+  shell: |
+    cd {{ ibl_root }}/app/ibl-dm/ibl-dm-pro/ && docker compose exec -T web ./manage.py shell -c "
+    from ibl_ai_mentor.models import UseMainLLMKey
+    from core.models import Platform
+    platform = Platform.objects.get(key='main')
+    UseMainLLMKey.objects.update_or_create(
+        platform=platform,
+        defaults={'use_main_key': True},
+    )
+    print('UseMainLLMKey configured for main platform')
+    "
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ ansible_user }}"
