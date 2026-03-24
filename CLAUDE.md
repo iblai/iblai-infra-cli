@@ -12,7 +12,7 @@ Interactive CLI tool for provisioning ibl.ai platform infrastructure on AWS. Bui
 iblai-infra/
 ├── pyproject.toml                          # uv/hatch config, dynamic version, entry point: iblai = iblai_infra.cli:app
 ├── src/iblai_infra/
-│   ├── __init__.py                         # __version__ = "0.5.0"
+│   ├── __init__.py                         # __version__ = "1.2.1"
 │   ├── __main__.py                         # python -m iblai_infra support
 │   ├── cli.py                              # Typer app: root `iblai` + `infra` subgroup + landing screen menu
 │   ├── app.py                              # Wizard orchestrator (5-step flow)
@@ -36,7 +36,7 @@ iblai-infra/
 │   └── ansible/
 │       ├── __init__.py
 │       ├── runner.py                       # AnsibleRunner: preflight, SSH test, inventory, playbook execution
-│       └── templates/single-server/        # Ansible playbook + roles (docker, awscli, python, ibl_cli_ops, ibl_platform, ibl_dm, ibl_edx, final_steps)
+│       └── templates/single-server/        # Ansible playbook + roles (docker, awscli, python, ibl_cli_ops, ibl_platform, ibl_dm, ibl_edx, ibl_spa, final_steps)
 ├── tests/
 │   ├── conftest.py                         # Shared fixtures (aws_credentials, infra_config, project_state, workspace_root)
 │   ├── test_models.py                      # Pydantic model validation, all enum combos, edge cases
@@ -141,6 +141,16 @@ Both paths share `_confirm_and_run()` for the review summary → confirm → ans
 - `_generate_tfvars()` converts InfraConfig → terraform.tfvars
 - `RESOURCE_LABELS` maps AWS resource types to human-friendly names
 
+### Ansible Runner
+
+- Runs `ansible-playbook playbook.yml --extra-vars <JSON>` as a subprocess
+- Secrets (AWS keys, GitHub token) passed via `--extra-vars`, never written to disk
+- Parses stdout line-by-line: `TASK [role : desc]` patterns for progress, `fatal:`/`FAILED!` for errors
+- Rich Live display: role status table + progress bar, `transient=True`
+- **Error handling:** trusts `proc.returncode` as the primary success signal. Tasks with `ignore_errors: true` emit `fatal:` lines but Ansible returns 0 — runner shows these as warnings, not failures
+- `ROLE_LABELS` maps role names to human-friendly labels (9 roles)
+- DM postgres tasks read `$POSTGRES_USER` and `$POSTGRES_DB` from container env (not hardcoded)
+
 ### IAM Permission Checks
 
 - `iblai infra permissions` — displays the minimum IAM policy JSON required for provisioning
@@ -187,7 +197,7 @@ Uses `locals` with `use_acm`, `use_upload`, `use_https` booleans and conditional
 
 ## Testing
 
-- **380 tests**, all via pytest: `uv run pytest tests/ -v`
+- **357 tests**, all via pytest: `uv run pytest tests/ -v`
 - Coverage report: `uv run pytest tests/ --cov=iblai_infra --cov-report=term-missing`
 - Dev dependencies: `uv sync --extra dev`
 - Test patterns:
