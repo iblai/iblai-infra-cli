@@ -43,3 +43,29 @@
       No edX containers found after launch.
       Check 'ibl edx launch' output above for errors.
   when: edx_containers.stdout | trim | length == 0
+
+- name: Wait for LMS to be ready
+  become: false
+  shell: |
+    curl -s -o /dev/null -w '%{http_code}' http://localhost:8600/heartbeat 2>/dev/null | grep -q '200'
+  args:
+    executable: /bin/bash
+  register: lms_health
+  until: lms_health.rc == 0
+  retries: 40
+  delay: 15
+
+- name: Check LMS container is not crash-looping
+  become: false
+  shell: |
+    docker inspect --format '{{ '{{' }}.RestartCount{{ '}}' }}' ibl_prod_lms
+  args:
+    executable: /bin/bash
+  register: lms_restart_count
+
+- name: Fail if LMS is crash-looping
+  fail:
+    msg: >-
+      ibl_prod_lms has restarted {{ lms_restart_count.stdout | trim }} times.
+      Run 'docker logs ibl_prod_lms' on the server to diagnose.
+  when: lms_restart_count.stdout | trim | int > 3

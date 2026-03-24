@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2] — 2026-03-24
+
+### Fixed
+- DM container verification now waits for the web endpoint to respond (up to 10 minutes) instead of only checking `docker ps` — catches crash-looping containers that still show as "Running"
+- DM verification checks `RestartCount` and fails with actionable error (suggests `ibl dm migrate`) if container has restarted more than 3 times
+- edX container verification also checks LMS `/heartbeat` endpoint readiness and restart count
+
 ## [1.2.1] — 2026-03-24
 
 ### Fixed
