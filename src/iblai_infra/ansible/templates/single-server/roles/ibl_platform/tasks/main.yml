@@ -138,6 +138,7 @@
     ibl config save --set 'IBL_EDX.PERMISSIONS_DOCKER_IMAGE=docker.io/overhangio/openedx-permissions:18.1.3'
     ibl config save --set 'IBL_EDX.MFE_DOCKER_IMAGE=765174860755.dkr.ecr.us-east-1.amazonaws.com/ibl-edx-mfe-pro:sumac.0.3.2'
     ibl config save --set 'IBL_EDX.IBL_EDX_MAGIC_LINK_LOGIN.ENABLE_JWT_AUTH=True'
+    ibl config save --set 'IBL_EDX.IBL_EDX_CORS_HEADER.CORS_ORIGIN_ALLOW_ALL=true'
   args:
     executable: /bin/bash
     chdir: "{{ repo_dir }}"
@@ -169,6 +170,42 @@
     pyenv activate "{{ venv_name }}"
     ibl config save --set IBL_DM.ENABLE_IBL_AI={{ enable_ai }} && \
     ibl config save --set IBL_DM.ENABLE_IBL_AI_PLUS={{ enable_ai }}
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+
+- name: Enable DM RBAC
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    ibl config save --set 'IBL_DM.ENABLE_RBAC=true'
+    ibl config save --set 'IBL_DM.ENABLE_RBAC_SEEDING=true'
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+
+- name: Ensure ibl-edx-uwsgi plugin is enabled
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    CURRENT_PLUGINS=$(ibl config printvalue IBL_EDX.PLUGINS 2>/dev/null | tr -d "'" | tr -d '"')
+    if echo "$CURRENT_PLUGINS" | grep -q "ibl-edx-uwsgi"; then
+      echo "ibl-edx-uwsgi already in plugins"
+    else
+      ibl config save --set "IBL_EDX.PLUGINS=${CURRENT_PLUGINS},ibl-edx-uwsgi"
+    fi
   args:
     executable: /bin/bash
     chdir: "{{ repo_dir }}"
