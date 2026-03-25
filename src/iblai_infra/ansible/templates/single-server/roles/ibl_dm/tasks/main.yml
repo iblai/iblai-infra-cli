@@ -86,3 +86,30 @@
       Check 'ibl dm launch' output above for errors
       (common cause: missing ibl_local_default docker network).
   when: dm_containers.stdout | trim | length == 0
+
+- name: Wait for DM web to be ready
+  become: false
+  shell: |
+    curl -s -o /dev/null -w '%{http_code}' http://localhost:8400/ 2>/dev/null | grep -qE '^(200|301|302|404)$'
+  args:
+    executable: /bin/bash
+  register: dm_health
+  until: dm_health.rc == 0
+  retries: 40
+  delay: 15
+
+- name: Check DM web container is not crash-looping
+  become: false
+  shell: |
+    docker inspect --format '{{ '{{' }}.RestartCount{{ '}}' }}' ibl_dm_pro_web
+  args:
+    executable: /bin/bash
+  register: dm_restart_count
+
+- name: Fail if DM web is crash-looping
+  fail:
+    msg: >-
+      ibl_dm_pro_web has restarted {{ dm_restart_count.stdout | trim }} times.
+      Run 'docker logs ibl_dm_pro_web' on the server to diagnose.
+      Common cause: missing database migrations — try 'ibl dm migrate'.
+  when: dm_restart_count.stdout | trim | int > 3
