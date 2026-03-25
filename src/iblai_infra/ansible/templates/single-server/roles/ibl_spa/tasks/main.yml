@@ -84,14 +84,40 @@
     ibl config save --set 'IBL_SPA.MENTOR.DOCKER_IMAGE_VERSION={{ spa_mentor_image_tag }}'
     ibl config save --set 'IBL_SPA.MENTOR.IFRAME_MENTOR_DOMAIN=https://mentorai.{{ base_domain }}'
     ibl config save --set 'IBL_SPA.MENTOR.DOMAIN=https://mentorai.{{ base_domain }}'
-    ibl config save --set "IBL_SPA.MENTOR.ENABLE_RBAC='true'"
-    ibl config save --set "IBL_SPA.MENTOR.STRIPE_ENABLED='true'"
-    ibl config save --set "IBL_SPA.MENTOR.SKIP_TEST='true'"
-    ibl config save --set "IBL_SPA.MENTOR.ENABLE_APP_SITE_ASSOCIATION='true'"
-    ibl config save --set "IBL_SPA.MENTOR.CANVAS_ADMIN_ONLY='false'"
     ibl config save --set 'IBL_SPA.SKILLS.DOMAIN=skillsai.{{ base_domain }}'
     ibl config save --set 'IBL_SPA.SKILLS.DOCKER_IMAGE_VERSION={{ spa_skills_image_tag }}'
-    ibl config save --set "IBL_SPA.SKILLS.ENABLE_RBAC='true'"
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+
+- name: Set SPA quoted boolean values in config.yml
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    python3 -c "
+    import yaml
+    config_path = '{{ ibl_root }}/config.yml'
+    with open(config_path) as f:
+        cfg = yaml.safe_load(f) or {}
+    spa = cfg.setdefault('IBL_SPA', {})
+    mentor = spa.setdefault('MENTOR', {})
+    mentor['ENABLE_RBAC'] = 'true'
+    mentor['STRIPE_ENABLED'] = 'true'
+    mentor['SKIP_TEST'] = 'true'
+    mentor['ENABLE_APP_SITE_ASSOCIATION'] = 'true'
+    mentor['CANVAS_ADMIN_ONLY'] = 'false'
+    skills = spa.setdefault('SKILLS', {})
+    skills['ENABLE_RBAC'] = 'true'
+    with open(config_path, 'w') as f:
+        yaml.dump(cfg, f, default_flow_style=False)
+    print('SPA boolean config values set')
+    "
   args:
     executable: /bin/bash
     chdir: "{{ repo_dir }}"
