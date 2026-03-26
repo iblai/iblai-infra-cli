@@ -13,7 +13,7 @@ import typer
 from typer.testing import CliRunner
 
 from iblai_infra import __version__
-from iblai_infra.cli import app, _run_setup_provisioned, _interactive_setup, _resolve_credentials
+from iblai_infra.cli import app, _run_setup_provisioned, _run_resetup, _interactive_setup, _interactive_resetup, _resolve_credentials
 from iblai_infra.models import (
     AWSCredentials,
     AuthMethod,
@@ -209,6 +209,124 @@ class TestInteractiveSetup:
         ):
             mock_select.return_value.ask.return_value = None
             _interactive_setup()  # Should just return
+
+
+# ---------------------------------------------------------------------------
+# _run_resetup — state checks
+# ---------------------------------------------------------------------------
+
+
+class TestRunResetup:
+    def test_not_found(self):
+        with patch("iblai_infra.cli.load_state", return_value=None):
+            with pytest.raises(_EXIT_EXCEPTIONS):
+                _run_resetup("nonexistent")
+
+    def test_destroyed_state(self, project_state):
+        project_state.status = "destroyed"
+        with patch("iblai_infra.cli.load_state", return_value=project_state):
+            with pytest.raises(_EXIT_EXCEPTIONS):
+                _run_resetup("testproject")
+
+    def test_initialized_state(self, project_state):
+        project_state.status = "initialized"
+        with patch("iblai_infra.cli.load_state", return_value=project_state):
+            with pytest.raises(_EXIT_EXCEPTIONS):
+                _run_resetup("testproject")
+
+    def test_failed_state(self, project_state):
+        project_state.status = "failed"
+        with patch("iblai_infra.cli.load_state", return_value=project_state):
+            with pytest.raises(_EXIT_EXCEPTIONS):
+                _run_resetup("testproject")
+
+    def test_no_outputs(self, project_state):
+        project_state.outputs = None
+        with patch("iblai_infra.cli.load_state", return_value=project_state):
+            with pytest.raises(_EXIT_EXCEPTIONS):
+                _run_resetup("testproject")
+
+    def test_no_instance_ip(self, project_state):
+        project_state.outputs = {"alb_dns_name": "some-alb.amazonaws.com"}
+        with patch("iblai_infra.cli.load_state", return_value=project_state):
+            with pytest.raises(_EXIT_EXCEPTIONS):
+                _run_resetup("testproject")
+
+    def test_ansible_not_installed(self, project_state):
+        with (
+            patch("iblai_infra.cli.load_state", return_value=project_state),
+            patch("shutil.which", return_value=None),
+        ):
+            with pytest.raises(_EXIT_EXCEPTIONS):
+                _run_resetup("testproject")
+
+    def test_any_setup_status_allowed(self, project_state):
+        """Resetup works regardless of setup_status — no rerun prompt."""
+        project_state.setup_status = "completed"
+        with (
+            patch("iblai_infra.cli.load_state", return_value=project_state),
+            patch("shutil.which", return_value=None),
+        ):
+            # Should reach the ansible check (no rerun confirmation needed)
+            with pytest.raises(_EXIT_EXCEPTIONS):
+                _run_resetup("testproject")
+
+    def test_pending_setup_status_allowed(self, project_state):
+        """Resetup works even if setup was never run."""
+        project_state.setup_status = None
+        with (
+            patch("iblai_infra.cli.load_state", return_value=project_state),
+            patch("shutil.which", return_value=None),
+        ):
+            with pytest.raises(_EXIT_EXCEPTIONS):
+                _run_resetup("testproject")
+
+
+# ---------------------------------------------------------------------------
+# _interactive_resetup — selection logic
+# ---------------------------------------------------------------------------
+
+
+class TestInteractiveResetup:
+    def test_no_eligible(self):
+        """With no created environments, shows info message."""
+        with patch("iblai_infra.cli.list_all_states", return_value=[]):
+            _interactive_resetup()  # Should return without error
+
+    def test_no_created_shows_info(self, project_state):
+        project_state.status = "initialized"
+        with patch("iblai_infra.cli.list_all_states", return_value=[project_state]):
+            _interactive_resetup()  # Should return without error
+
+    def test_single_eligible_goes_directly(self, project_state):
+        with (
+            patch("iblai_infra.cli.list_all_states", return_value=[project_state]),
+            patch("iblai_infra.cli._run_resetup") as mock_run,
+        ):
+            _interactive_resetup()
+            mock_run.assert_called_once_with("testproject")
+
+    def test_multiple_eligible_prompts_selection(self, project_state):
+        state2 = project_state.model_copy()
+        state2.name = "project2"
+        with (
+            patch("iblai_infra.cli.list_all_states", return_value=[project_state, state2]),
+            patch("questionary.select") as mock_select,
+            patch("iblai_infra.cli._run_resetup") as mock_run,
+        ):
+            mock_select.return_value.ask.return_value = "project2"
+            _interactive_resetup()
+            mock_run.assert_called_once_with("project2")
+
+    def test_user_cancels_selection(self, project_state):
+        state2 = project_state.model_copy()
+        state2.name = "project2"
+        with (
+            patch("iblai_infra.cli.list_all_states", return_value=[project_state, state2]),
+            patch("questionary.select") as mock_select,
+        ):
+            mock_select.return_value.ask.return_value = None
+            _interactive_resetup()  # Should just return
 
 
 # ---------------------------------------------------------------------------

@@ -308,7 +308,7 @@ class AnsibleRunner:
 
     def _build_extra_vars(self) -> dict:
         """Build the extra-vars dict. Secrets are passed here, never to disk."""
-        return {
+        extra = {
             "aws_access_key_id": self.config.aws_access_key_id,
             "aws_secret_access_key": self.config.aws_secret_access_key,
             "aws_default_region": self.config.aws_default_region,
@@ -316,17 +316,26 @@ class AnsibleRunner:
             "base_domain": self.config.base_domain,
             "edx_version": self.config.edx_version,
             "env_config": self.config.env_config,
-            "dm_image_tag": self.config.dm_image_tag,
-            "edx_image_tag": self.config.edx_image_tag,
+            "cli_ops_release_tag": self.config.cli_ops_release_tag,
+            "is_resetup": self.config.is_resetup,
             "enable_ai": self.config.enable_ai,
-            "spa_auth_image_tag": self.config.spa_auth_image_tag,
-            "spa_mentor_image_tag": self.config.spa_mentor_image_tag,
-            "spa_skills_image_tag": self.config.spa_skills_image_tag,
             "openai_api_key": self.config.openai_api_key,
             "admin_username": self.config.admin_username,
             "admin_email": self.config.admin_email,
             "admin_password": self.config.admin_password,
         }
+        # Image tags are optional — only passed for first-time setup
+        if self.config.dm_image_tag is not None:
+            extra["dm_image_tag"] = self.config.dm_image_tag
+        if self.config.edx_image_tag is not None:
+            extra["edx_image_tag"] = self.config.edx_image_tag
+        if self.config.spa_auth_image_tag is not None:
+            extra["spa_auth_image_tag"] = self.config.spa_auth_image_tag
+        if self.config.spa_mentor_image_tag is not None:
+            extra["spa_mentor_image_tag"] = self.config.spa_mentor_image_tag
+        if self.config.spa_skills_image_tag is not None:
+            extra["spa_skills_image_tag"] = self.config.spa_skills_image_tag
+        return extra
 
     # ------------------------------------------------------------------
     # Live display

@@ -80,6 +80,7 @@ def infra_root(ctx: typer.Context) -> None:
         ("iblai infra provision", "Launch the interactive provisioning wizard"),
         ("iblai infra retry <name>", "Retry a failed provisioning run"),
         ("iblai infra setup", "Set up the IBL platform on a server"),
+        ("iblai infra resetup <name>", "Re-setup with new domain and secrets"),
         ("iblai infra destroy <name>", "Destroy existing infrastructure"),
         ("iblai infra status <name>", "Show infrastructure details and outputs"),
         ("iblai infra list", "List all managed environments"),
@@ -101,6 +102,7 @@ def infra_root(ctx: typer.Context) -> None:
             questionary.Choice("Provision infrastructure", value="provision"),
             questionary.Choice("Retry failed provisioning", value="retry"),
             questionary.Choice("Set up platform on a server", value="setup"),
+            questionary.Choice("Re-setup an existing environment", value="resetup"),
             questionary.Choice("Check AWS permissions", value="permissions"),
             questionary.Choice("List managed environments", value="list"),
             questionary.Choice("Show required IAM policy", value="policy"),
@@ -128,6 +130,8 @@ def infra_root(ctx: typer.Context) -> None:
         _interactive_retry()
     elif action == "setup":
         _interactive_setup()
+    elif action == "resetup":
+        _interactive_resetup()
     elif action == "permissions":
         ctx.invoke(permissions, check=True, profile=None, region="us-east-1")
     elif action == "list":
@@ -327,6 +331,14 @@ def setup(
         _run_setup_interactive()
 
 
+@infra_app.command()
+def resetup(
+    name: str = typer.Argument(help="Project name to re-setup"),
+) -> None:
+    """Re-setup an existing environment with a new domain and fresh secrets."""
+    _run_resetup(name)
+
+
 def _interactive_setup() -> None:
     """Launch setup from the landing menu."""
     import questionary
@@ -384,6 +396,80 @@ def _interactive_setup() -> None:
         return
 
     _run_setup_provisioned(selected)
+
+
+def _interactive_resetup() -> None:
+    """Launch resetup from the landing menu."""
+    import questionary
+
+    states = list_all_states()
+    eligible = [s for s in states if s.status == "created"]
+
+    if not eligible:
+        ui.info("No environments available for re-setup.")
+        ui.muted("Run [brand]iblai infra provision[/brand] or [brand]iblai infra setup[/brand] first.")
+        return
+
+    if len(eligible) == 1:
+        _run_resetup(eligible[0].name)
+        return
+
+    env_choices = [
+        questionary.Choice(
+            f"{s.name} ({s.config.dns.base_domain})",
+            value=s.name,
+        )
+        for s in eligible
+    ]
+    selected = questionary.select(
+        "Which environment to re-setup?",
+        choices=env_choices,
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if selected is None:
+        return
+
+    _run_resetup(selected)
+
+
+def _run_resetup(name: str) -> None:
+    """Re-setup an existing environment with a new domain and fresh secrets."""
+    state = load_state(name)
+    if state is None:
+        ui.error(f"No infrastructure found with name: {name}")
+        raise typer.Exit(1)
+
+    if state.status != "created":
+        ui.error(
+            f"Infrastructure '{name}' has status '{state.status}'. "
+            "It must be fully provisioned (status: created) before re-setup."
+        )
+        raise typer.Exit(1)
+
+    if not state.outputs or not state.outputs.get("instance_public_ip"):
+        ui.error("No instance IP found in Terraform outputs. Re-run provisioning.")
+        raise typer.Exit(1)
+
+    import shutil
+
+    from iblai_infra.prompts.setup import prompt_resetup
+
+    if shutil.which("ansible-playbook") is None:
+        ui.error("ansible-playbook not found")
+        ui.newline()
+        ui.info("Install with: [highlight]pip install ansible-core[/highlight]")
+        ui.muted(f"Then re-run: [brand]iblai infra resetup {name}[/brand]")
+        ui.newline()
+        raise typer.Exit(1)
+
+    try:
+        setup_config = prompt_resetup(state)
+    except KeyboardInterrupt:
+        ui.newline()
+        ui.abort("Interrupted.")
+
+    _confirm_and_run(state, setup_config, f"iblai infra resetup {name}")
 
 
 def _run_setup_provisioned(name: str) -> None:
@@ -546,14 +632,18 @@ def _confirm_and_run(state, setup_config, rerun_hint: str) -> None:
 
     from iblai_infra.ansible.runner import AnsibleRunner
 
-    rows = [
+    rows = []
+    if setup_config.is_resetup:
+        rows.append(("Mode", "Re-setup"))
+    rows.extend([
         ("Target", setup_config.target_host),
         ("SSH key", str(setup_config.ssh_private_key_path)),
         ("Domain", setup_config.base_domain),
+        ("CLI ops tag", setup_config.cli_ops_release_tag),
         ("edX version", setup_config.edx_version),
         ("Env config", setup_config.env_config),
         ("AWS region", setup_config.aws_default_region),
-    ]
+    ])
     ui.summary_panel("Setup Summary", rows)
 
     import questionary

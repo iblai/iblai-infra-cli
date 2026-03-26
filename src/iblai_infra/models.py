@@ -222,12 +222,14 @@ class SetupConfig(BaseModel):
     base_domain: str
     edx_version: str = "sumac"
     env_config: str = "single-server"
-    dm_image_tag: str
-    edx_image_tag: str
+    cli_ops_release_tag: str = "3.19.0"
+    dm_image_tag: str | None = None
+    edx_image_tag: str | None = None
     enable_ai: bool = True
-    spa_auth_image_tag: str
-    spa_mentor_image_tag: str
-    spa_skills_image_tag: str
+    spa_auth_image_tag: str | None = None
+    spa_mentor_image_tag: str | None = None
+    spa_skills_image_tag: str | None = None
+    is_resetup: bool = False
     aws_access_key_id: str
     aws_secret_access_key: str
     aws_default_region: str
