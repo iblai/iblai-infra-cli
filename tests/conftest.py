@@ -83,11 +83,31 @@ def setup_config(tmp_path: Path) -> SetupConfig:
         base_domain="example.com",
         edx_version="sumac",
         env_config="single-server",
+        cli_ops_release_tag="3.19.0",
         dm_image_tag="4.189.1-ai",
         edx_image_tag="sumac.2.4.13",
         spa_auth_image_tag="1.13.15",
         spa_mentor_image_tag="0.35.14",
         spa_skills_image_tag="0.9.8",
+        aws_access_key_id="AKIAIOSFODNN7EXAMPLE",
+        aws_secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        aws_default_region="us-east-1",
+        git_access_token="ghp_testtoken123",
+    )
+
+
+@pytest.fixture
+def resetup_config(tmp_path: Path) -> SetupConfig:
+    key_path = tmp_path / "key.pem"
+    key_path.write_text("fake-key")
+    key_path.chmod(0o600)
+    return SetupConfig(
+        ssh_private_key_path=key_path,
+        ssh_user="ubuntu",
+        target_host="54.123.45.67",
+        base_domain="newdomain.com",
+        cli_ops_release_tag="3.19.0",
+        is_resetup=True,
         aws_access_key_id="AKIAIOSFODNN7EXAMPLE",
         aws_secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
         aws_default_region="us-east-1",

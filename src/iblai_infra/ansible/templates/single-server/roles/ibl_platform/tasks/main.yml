@@ -7,6 +7,22 @@
     group: "{{ ansible_user }}"
     recurse: true
 
+- name: Rotate secrets and auth credentials
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    ibl config rotate-secrets -f --include-auth
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+  when: is_resetup | default(false) | bool
+
 - name: Configure edX version
   become: false
   shell: |
@@ -103,6 +119,7 @@
   environment:
     HOME: "/home/{{ ansible_user }}"
     IBL_ROOT: "{{ ibl_root }}/"
+  when: dm_image_tag is defined
 
 - name: Configure edX image
   become: false
@@ -118,6 +135,7 @@
   environment:
     HOME: "/home/{{ ansible_user }}"
     IBL_ROOT: "{{ ibl_root }}/"
+  when: edx_image_tag is defined
 
 - name: Set edX supporting service image defaults
   become: false

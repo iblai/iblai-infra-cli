@@ -12,6 +12,7 @@ from iblai_infra.models import ProjectState, SetupConfig, SSHKeyMethod
 
 SETUP_STEPS = 3
 BOOTSTRAP_STEPS = 4
+RESETUP_STEPS = 3
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +103,17 @@ def _prompt_platform_config(
     env_config = "single-server"
     ui.success(f"Server type: [highlight]Single Server[/highlight]")
 
+    cli_ops_release_tag = questionary.text(
+        "iblai-cli-ops release tag:",
+        default="3.19.0",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if cli_ops_release_tag is None:
+        ui.abort()
+    cli_ops_release_tag = cli_ops_release_tag.strip()
+    ui.success(f"iblai-cli-ops release: [highlight]{cli_ops_release_tag}[/highlight]")
+
     dm_image_tag = questionary.text(
         "iblai-dm-pro release tag:",
         default="4.189.1-ai",
@@ -174,6 +186,7 @@ def _prompt_platform_config(
         "base_domain": base_domain,
         "edx_version": edx_version,
         "env_config": env_config,
+        "cli_ops_release_tag": cli_ops_release_tag,
         "dm_image_tag": dm_image_tag,
         "edx_image_tag": edx_image_tag,
         "enable_ai": enable_ai,
@@ -375,6 +388,86 @@ def prompt_setup(state: ProjectState) -> SetupConfig:
         ssh_private_key_path=ssh_key,
         target_host=target_host,
         **platform,
+        **cred,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Re-setup flow (existing environment)
+# ---------------------------------------------------------------------------
+
+
+def prompt_resetup(state: ProjectState) -> SetupConfig:
+    """Collect variables for re-setup of an existing environment."""
+    target_host = state.outputs.get("instance_public_ip", "")
+
+    # ----- Step 1: SSH Access -----
+    ui.step_header(1, RESETUP_STEPS, "SSH Access")
+
+    ui.success(f"Target: [highlight]{target_host}[/highlight]")
+
+    ssh_key = _resolve_ssh_key(state)
+
+    if ssh_key:
+        ui.success(f"SSH key: [highlight]{ssh_key}[/highlight]")
+    else:
+        method = state.config.ssh.method
+        if method == SSHKeyMethod.EXISTING_FILE:
+            ui.info(
+                "You provided a public key file during provisioning. "
+                "The private key is needed for SSH access."
+            )
+        elif method == SSHKeyMethod.AWS_KEYPAIR:
+            ui.info(
+                f"Infrastructure uses AWS key pair [highlight]{state.config.ssh.key_name}[/highlight]. "
+                "Provide the matching private key."
+            )
+        else:
+            ui.info("Could not locate the SSH private key from provisioning.")
+
+        ssh_key = _prompt_ssh_key_path()
+        ui.success(f"SSH key: [highlight]{ssh_key}[/highlight]")
+
+    _validate_key_permissions(ssh_key)
+
+    # ----- Step 2: Platform Configuration -----
+    ui.step_header(2, RESETUP_STEPS, "Platform Configuration")
+
+    current_domain = state.config.dns.base_domain
+    ui.info(f"Current domain: [highlight]{current_domain}[/highlight]")
+
+    base_domain = questionary.text(
+        "New base domain:",
+        default=current_domain,
+        validate=lambda v: len(v.strip()) > 0 or "Required",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if base_domain is None:
+        ui.abort()
+    base_domain = base_domain.strip()
+    ui.success(f"Domain: [highlight]{base_domain}[/highlight]")
+
+    cli_ops_release_tag = questionary.text(
+        "iblai-cli-ops release tag:",
+        default="3.19.0",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if cli_ops_release_tag is None:
+        ui.abort()
+    cli_ops_release_tag = cli_ops_release_tag.strip()
+    ui.success(f"iblai-cli-ops release: [highlight]{cli_ops_release_tag}[/highlight]")
+
+    # ----- Step 3: Credentials -----
+    cred = _prompt_credentials(step=3, total=RESETUP_STEPS, state=state)
+
+    return SetupConfig(
+        ssh_private_key_path=ssh_key,
+        target_host=target_host,
+        base_domain=base_domain,
+        cli_ops_release_tag=cli_ops_release_tag,
+        is_resetup=True,
         **cred,
     )
 

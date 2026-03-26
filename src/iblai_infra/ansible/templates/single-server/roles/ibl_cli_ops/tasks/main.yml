@@ -11,7 +11,7 @@
   git:
     repo: "https://{{ git_access_token }}@github.com/{{ repo_slug }}.git"
     dest: "{{ repo_dir }}"
-    version: develop
+    version: "{{ cli_ops_release_tag }}"
     force: true
 
 - name: Install requirements from sumac.in
