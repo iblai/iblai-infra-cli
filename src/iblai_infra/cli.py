@@ -657,6 +657,11 @@ def _confirm_and_run(state, setup_config, rerun_hint: str) -> None:
     if not confirm:
         ui.abort("Cancelled.")
 
+    # Update state with new base domain so `iblai infra list` reflects it
+    if setup_config.is_resetup and state.config.dns.base_domain != setup_config.base_domain:
+        state.config.dns.base_domain = setup_config.base_domain
+        save_state(state)
+
     runner = AnsibleRunner(state, setup_config)
 
     if not runner.preflight():
