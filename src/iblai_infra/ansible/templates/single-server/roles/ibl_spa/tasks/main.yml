@@ -179,6 +179,17 @@
   retries: 2
   delay: 5
 
+- name: Wait for Auth SPA to be ready
+  become: false
+  shell: |
+    curl -s -o /dev/null -w '%{http_code}' http://localhost:5000/ 2>/dev/null | grep -qE '^(200|301|302)$'
+  args:
+    executable: /bin/bash
+  register: auth_health
+  until: auth_health.rc == 0
+  retries: 5
+  delay: 10
+
 - name: Launch Mentor SPA
   become: false
   shell: |
@@ -191,6 +202,17 @@
   retries: 2
   delay: 5
 
+- name: Wait for Mentor SPA to be ready
+  become: false
+  shell: |
+    curl -s -o /dev/null -w '%{http_code}' http://localhost:5001/ 2>/dev/null | grep -qE '^(200|301|302)$'
+  args:
+    executable: /bin/bash
+  register: mentor_health
+  until: mentor_health.rc == 0
+  retries: 5
+  delay: 10
+
 - name: Launch Skills SPA
   become: false
   shell: |
@@ -202,6 +224,17 @@
   register: skills_spa_result
   retries: 2
   delay: 5
+
+- name: Wait for Skills SPA to be ready
+  become: false
+  shell: |
+    curl -s -o /dev/null -w '%{http_code}' http://localhost:5002/ 2>/dev/null | grep -qE '^(200|301|302)$'
+  args:
+    executable: /bin/bash
+  register: skills_health
+  until: skills_health.rc == 0
+  retries: 5
+  delay: 10
 
 - name: Save config and reload proxy after SPA launch
   become: false
