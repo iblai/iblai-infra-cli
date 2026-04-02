@@ -12,7 +12,20 @@ import typer
 from rich.table import Table
 
 from iblai_infra import __version__, ui
-from iblai_infra.terraform.state import list_all_states, load_session, load_state, save_session, save_state
+from iblai_infra.terraform.state import (
+    add_ingress,
+    claim_ingress,
+    configure_ingress_lock,
+    get_ingress_status,
+    list_all_states,
+    load_ingress,
+    load_session,
+    load_state,
+    release_ingress_lock,
+    remove_ingress,
+    save_session,
+    save_state,
+)
 
 # ---------------------------------------------------------------------------
 # Root app: `iblai`
@@ -58,6 +71,139 @@ infra_app = typer.Typer(
 
 app.add_typer(infra_app)
 
+# ---------------------------------------------------------------------------
+# Subcommand group: `iblai infra ingress`
+# ---------------------------------------------------------------------------
+
+ingress_app = typer.Typer(
+    name="ingress",
+    help="Manage pre-provisioned ingress endpoints (domains, certs, DNS).",
+    no_args_is_help=True,
+)
+infra_app.add_typer(ingress_app, name="ingress")
+
+
+@ingress_app.command("list")
+def ingress_list() -> None:
+    """List registered ingress endpoints."""
+    entries = load_ingress()
+    if not entries:
+        ui.info("No ingress endpoints registered.")
+        ui.muted("Add one with: [brand]iblai infra ingress add <name> <domain>[/brand]")
+        return
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Name")
+    table.add_column("Domain")
+    table.add_column("Added")
+
+    for e in entries:
+        table.add_row(e.name, e.domain, e.created_at.strftime("%Y-%m-%d"))
+
+    ui.console.print(table)
+
+
+@ingress_app.command("add")
+def ingress_add(
+    name: str = typer.Argument(help="Short name for the ingress (e.g. stg1)"),
+    domain: str = typer.Argument(help="Base domain (e.g. stg1.iblai.org)"),
+) -> None:
+    """Register a pre-provisioned ingress endpoint."""
+    try:
+        entry = add_ingress(name, domain)
+        ui.success(f"Added ingress [highlight]{entry.name}[/highlight] ({entry.domain})")
+    except ValueError as e:
+        ui.error(str(e))
+        raise typer.Exit(1)
+
+
+@ingress_app.command("remove")
+def ingress_remove(
+    name: str = typer.Argument(help="Name of the ingress to remove"),
+) -> None:
+    """Remove an ingress endpoint from the registry."""
+    if remove_ingress(name):
+        ui.success(f"Removed ingress [highlight]{name}[/highlight]")
+    else:
+        ui.error(f"No ingress found with name: {name}")
+        raise typer.Exit(1)
+
+
+@ingress_app.command("configure")
+def ingress_configure(
+    bucket: str = typer.Option(..., "--bucket", help="S3 bucket for lock storage"),
+    prefix: str = typer.Option("ingress-locks", "--prefix", help="S3 key prefix"),
+) -> None:
+    """Configure S3 as the lock backend for ingress slot management."""
+    configure_ingress_lock(bucket=bucket, prefix=prefix)
+    ui.success(f"Lock backend: [highlight]s3://{bucket}/{prefix}/[/highlight]")
+
+
+@ingress_app.command("status")
+def ingress_status() -> None:
+    """Show ingress endpoints with their claim status."""
+    entries = load_ingress()
+    if not entries:
+        ui.info("No ingress endpoints registered.")
+        return
+
+    statuses = get_ingress_status()
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Name")
+    table.add_column("Domain")
+    table.add_column("Status")
+    table.add_column("Claimed By")
+    table.add_column("Claimed At")
+
+    for entry, lock in statuses:
+        if lock:
+            table.add_row(
+                entry.name,
+                entry.domain,
+                "[red]claimed[/red]",
+                lock.get("claimed_by", ""),
+                lock.get("claimed_at", "")[:19],
+            )
+        else:
+            table.add_row(entry.name, entry.domain, "[green]free[/green]", "", "")
+
+    ui.console.print(table)
+
+
+@ingress_app.command("claim")
+def ingress_claim(
+    name: str | None = typer.Argument(None, help="Specific slot to claim (picks first free if omitted)"),
+    by: str = typer.Option("", "--by", help="Identifier for who is claiming (e.g. run ID)"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Print only the domain (for CI piping)"),
+) -> None:
+    """Claim a free ingress slot. Prints the domain on success."""
+    result = claim_ingress(name=name, claimed_by=by)
+    if result is None:
+        if name:
+            ui.error(f"Slot '{name}' is not available (already claimed or not registered).")
+        else:
+            ui.error("No free ingress slots available.")
+        raise typer.Exit(1)
+
+    slot_name, domain = result
+    if quiet:
+        ui.console.print(domain, highlight=False)
+    else:
+        ui.success(f"Claimed [highlight]{slot_name}[/highlight] ({domain})")
+
+
+@ingress_app.command("release")
+def ingress_release(
+    name: str = typer.Argument(help="Slot name to release"),
+) -> None:
+    """Release a claimed ingress slot."""
+    if release_ingress_lock(name):
+        ui.success(f"Released [highlight]{name}[/highlight]")
+    else:
+        ui.error(f"Slot '{name}' is not currently claimed.")
+        raise typer.Exit(1)
+
 
 @infra_app.callback(invoke_without_command=True)
 def infra_root(ctx: typer.Context) -> None:
@@ -81,10 +227,12 @@ def infra_root(ctx: typer.Context) -> None:
         ("iblai infra retry <name>", "Retry a failed provisioning run"),
         ("iblai infra setup", "Set up the IBL platform on a server"),
         ("iblai infra resetup <name>", "Re-setup with new domain and secrets"),
+        ("iblai infra launch-env", "Launch from .env file (interactive confirm)"),
         ("iblai infra launch --ami-id ...", "Launch from AMI (non-interactive, CI/CD)"),
         ("iblai infra destroy <name>", "Destroy existing infrastructure"),
         ("iblai infra status <name>", "Show infrastructure details and outputs"),
         ("iblai infra list", "List all managed environments"),
+        ("iblai infra ingress list|add|remove", "Manage pre-provisioned ingress endpoints"),
         ("iblai infra permissions", "Show required IAM policy"),
         ("iblai infra permissions --check", "Verify your AWS permissions"),
         ("iblai infra auth", "Authenticate or switch AWS credentials"),
@@ -104,6 +252,7 @@ def infra_root(ctx: typer.Context) -> None:
             questionary.Choice("Retry failed provisioning", value="retry"),
             questionary.Choice("Set up platform on a server", value="setup"),
             questionary.Choice("Re-setup an existing environment", value="resetup"),
+            questionary.Choice("Manage ingress endpoints", value="ingress"),
             questionary.Choice("Check AWS permissions", value="permissions"),
             questionary.Choice("List managed environments", value="list"),
             questionary.Choice("Show required IAM policy", value="policy"),
@@ -133,6 +282,8 @@ def infra_root(ctx: typer.Context) -> None:
         _interactive_setup()
     elif action == "resetup":
         _interactive_resetup()
+    elif action == "ingress":
+        ctx.invoke(ingress_list)
     elif action == "permissions":
         ctx.invoke(permissions, check=True, profile=None, region="us-east-1")
     elif action == "list":
@@ -343,7 +494,8 @@ def resetup(
 @infra_app.command()
 def launch(
     ami_id: str = typer.Option(..., "--ami-id", help="Custom AMI ID to launch from"),
-    domain: str = typer.Option(..., "--domain", help="Base domain (e.g. ami.iblai.org)"),
+    domain: str | None = typer.Option(None, "--domain", help="Base domain (e.g. ami.iblai.org)"),
+    ingress_name: str | None = typer.Option(None, "--ingress", help="Ingress endpoint name (resolves to domain)"),
     hosted_zone_id: str = typer.Option(..., "--hosted-zone-id", help="Route53 hosted zone ID"),
     aws_key_id: str = typer.Option(..., "--aws-key-id", help="AWS access key ID"),
     aws_secret_key: str = typer.Option(..., "--aws-secret-key", help="AWS secret access key"),
@@ -368,7 +520,157 @@ def launch(
 
     Provisions AWS infrastructure (VPC, ALB, ACM certs, Route53, EC2) via Terraform,
     then configures the platform (domain, secrets, service restarts) via Ansible.
+
+    Provide either --domain or --ingress (resolved from registered endpoints).
     """
+    if ingress_name and not domain:
+        entries = load_ingress()
+        match = next((e for e in entries if e.name == ingress_name), None)
+        if not match:
+            ui.error(f"No ingress endpoint found: {ingress_name}")
+            ui.muted("Run [brand]iblai infra ingress list[/brand] to see available endpoints.")
+            raise typer.Exit(1)
+        domain = match.domain
+    if not domain:
+        ui.error("Either --domain or --ingress is required.")
+        raise typer.Exit(1)
+    _run_launch(
+        ami_id=ami_id, domain=domain, hosted_zone_id=hosted_zone_id,
+        aws_key_id=aws_key_id, aws_secret_key=aws_secret_key,
+        ssh_public_key=ssh_public_key, ssh_key=ssh_key,
+        git_token=git_token, admin_email=admin_email,
+        admin_password=admin_password, vpn_ip=vpn_ip, name=name,
+        ssh_user=ssh_user, aws_region=aws_region,
+        instance_type=instance_type, volume_size=volume_size,
+        environment=environment, cli_tag=cli_tag,
+        admin_username=admin_username, openai_key=openai_key,
+        enable_ai=enable_ai,
+    )
+
+
+def _load_env_file(path: Path) -> dict[str, str]:
+    """Parse a .env file into a dict. Skips comments and blank lines."""
+    env = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        # Strip optional quotes
+        value = value.strip().strip('"').strip("'")
+        env[key.strip()] = value
+    return env
+
+
+def _mask(value: str) -> str:
+    """Mask a secret value for display."""
+    if len(value) <= 8:
+        return "****"
+    return value[:4] + "****" + value[-4:]
+
+
+@infra_app.command(name="launch-env")
+def launch_env(
+    env_file: Path = typer.Option(
+        ".env", "--env-file", "-f",
+        help="Path to .env file (default: .env in current directory)",
+    ),
+) -> None:
+    """Launch from a .env file. Copy .env.example to .env, fill in values, then run this."""
+    import questionary
+
+    if not env_file.exists():
+        ui.error(f"No .env file found at: {env_file}")
+        ui.newline()
+        ui.info("To get started:")
+        ui.muted("  1. Copy [brand].env.example[/brand] to [brand].env[/brand]")
+        ui.muted("  2. Fill in your values")
+        ui.muted("  3. Run [brand]iblai infra launch-env[/brand]")
+        ui.newline()
+        raise typer.Exit(1)
+
+    env = _load_env_file(env_file)
+
+    # Required variables
+    required = {
+        "AMI_ID": "Custom AMI ID",
+        "DOMAIN": "Base domain",
+        "HOSTED_ZONE_ID": "Route53 hosted zone ID",
+        "AWS_ACCESS_KEY_ID": "AWS access key ID",
+        "AWS_SECRET_ACCESS_KEY": "AWS secret access key",
+        "SSH_PUBLIC_KEY": "SSH public key",
+        "SSH_KEY_PATH": "Path to SSH private key",
+        "GIT_TOKEN": "GitHub Personal Access Token",
+        "ADMIN_EMAIL": "Admin email",
+        "ADMIN_PASSWORD": "Admin password",
+        "VPN_IP": "VPN IP for SSH access",
+    }
+
+    missing = [f"{desc} ({key})" for key, desc in required.items() if not env.get(key)]
+    if missing:
+        ui.error("Missing required variables in .env:")
+        for m in missing:
+            ui.muted(f"  - {m}")
+        ui.newline()
+        raise typer.Exit(1)
+
+    # Map env vars to launch params
+    ami_id = env["AMI_ID"]
+    domain = env["DOMAIN"]
+    hosted_zone_id = env["HOSTED_ZONE_ID"]
+    aws_key_id = env["AWS_ACCESS_KEY_ID"]
+    aws_secret_key = env["AWS_SECRET_ACCESS_KEY"]
+    ssh_public_key = env["SSH_PUBLIC_KEY"]
+    ssh_key = Path(env["SSH_KEY_PATH"]).expanduser()
+    git_token = env["GIT_TOKEN"]
+    admin_email = env["ADMIN_EMAIL"]
+    admin_password = env["ADMIN_PASSWORD"]
+    vpn_ip = env["VPN_IP"]
+
+    # Optional with defaults
+    name = env.get("NAME") or None
+    ssh_user = env.get("SSH_USER", "ubuntu")
+    aws_region = env.get("AWS_DEFAULT_REGION", "us-east-1")
+    instance_type = env.get("INSTANCE_TYPE", "t3.2xlarge")
+    volume_size = int(env.get("VOLUME_SIZE", "200"))
+    environment = env.get("ENVIRONMENT", "staging")
+    cli_tag = env.get("CLI_TAG", "3.19.0")
+    admin_username = env.get("ADMIN_USERNAME", "ibl_admin")
+    openai_key = env.get("OPENAI_API_KEY", "")
+    enable_ai = env.get("ENABLE_AI", "true").lower() in ("true", "1", "yes")
+
+    # Show summary
+    project_name = name or domain.replace(".", "-")
+    if len(project_name) > 32:
+        project_name = project_name[:32]
+
+    rows = [
+        ("AMI", ami_id),
+        ("Domain", domain),
+        ("Project", project_name),
+        ("Region", aws_region),
+        ("Instance", instance_type),
+        ("Volume", f"{volume_size} GB"),
+        ("Environment", environment),
+        ("VPN IP", vpn_ip),
+        ("SSH key", str(ssh_key)),
+        ("AWS key", _mask(aws_key_id)),
+        ("Admin", f"{admin_username} ({admin_email})"),
+        ("AI features", "Enabled" if enable_ai else "Disabled"),
+    ]
+    ui.summary_panel("Launch Configuration", rows)
+
+    confirm = questionary.confirm(
+        "Proceed with launch?",
+        default=True,
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if not confirm:
+        ui.abort("Cancelled.")
+
     _run_launch(
         ami_id=ami_id, domain=domain, hosted_zone_id=hosted_zone_id,
         aws_key_id=aws_key_id, aws_secret_key=aws_secret_key,

@@ -164,7 +164,19 @@ Re-configures a previously set up environment with a new domain and fresh secret
 
 Use this when you need to change the domain or rotate credentials on a running environment without reprovisioning the infrastructure.
 
-### 5. Launch from AMI (non-interactive, CI/CD)
+### 5. Launch from AMI
+
+**Simplest way — using a `.env` file:**
+
+```bash
+cp .env.example .env      # Copy the template
+vim .env                   # Fill in your values
+iblai infra launch-env     # Review summary, confirm, launch
+```
+
+The CLI reads `.env` from the current directory, shows a summary of what will be launched, and asks for confirmation before proceeding.
+
+**Non-interactive (CI/CD) — using flags:**
 
 ```bash
 iblai infra launch \
