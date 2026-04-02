@@ -38,7 +38,7 @@
 - name: Setup TimescaleDB views
   become: false
   shell: |
-    cd {{ ibl_root }}/app/ibl-dm/ibl-dm-pro/ && docker compose exec -T web ./manage.py setup_timescale_views --full-setup
+    cd {{ ibl_root }}/app/ibl-dm/ibl-dm-pro/ && echo "y" | docker compose exec -T web ./manage.py setup_timescale_views --full-setup
   args:
     executable: /bin/bash
   environment:
