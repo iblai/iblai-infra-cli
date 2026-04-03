@@ -177,11 +177,13 @@ class AnsibleRunner:
             env=self._env(),
         )
 
+        is_ci = os.environ.get("CI", "").lower() in ("true", "1")
+
         with Live(
             self._build_display(steps, progress),
             console=ui.console,
-            refresh_per_second=4,
-            transient=True,
+            refresh_per_second=1 if is_ci else 4,
+            transient=not is_ci,
         ) as live:
             for line in proc.stdout:
                 line = line.rstrip()
