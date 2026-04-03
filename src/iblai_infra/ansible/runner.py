@@ -268,10 +268,12 @@ class AnsibleRunner:
         return True
 
     def _test_ssh(self) -> bool:
-        """Test SSH connectivity to the target host."""
-        from rich.status import Status
+        """Test SSH connectivity to the target host with retries."""
+        max_retries = 10
+        delay = 15
 
-        with Status("  [info]Testing SSH connection...[/info]", console=ui.console):
+        for attempt in range(1, max_retries + 1):
+            ui.info(f"Testing SSH connection ({attempt}/{max_retries})...")
             result = subprocess.run(
                 [
                     "ssh",
@@ -287,27 +289,38 @@ class AnsibleRunner:
                 timeout=30,
             )
 
-        if result.returncode == 0:
-            ui.success(f"SSH connection verified ({self.config.target_host})")
-            return True
+            if result.returncode == 0:
+                ui.success(f"SSH connection verified ({self.config.target_host})")
+                return True
 
-        ui.error(f"Cannot connect to [highlight]{self.config.target_host}[/highlight] via SSH")
+            stderr = result.stderr.strip().lower() if result.stderr else ""
+
+            # Permission denied means SSH is up but key is wrong — don't retry
+            if "permission denied" in stderr:
+                ui.error(f"Cannot connect to [highlight]{self.config.target_host}[/highlight] via SSH")
+                ui.newline()
+                ui.muted("  The SSH key may not match the key pair used during provisioning.")
+                ui.muted(f"  Key used: {self.config.ssh_private_key_path}")
+                ui.newline()
+                return False
+
+            # Retryable errors — instance still booting
+            if attempt < max_retries:
+                ui.muted(f"  SSH not ready, retrying in {delay}s...")
+                time.sleep(delay)
+
+        ui.error(f"Cannot connect to [highlight]{self.config.target_host}[/highlight] via SSH after {max_retries} attempts")
         ui.newline()
 
         stderr = result.stderr.strip().lower() if result.stderr else ""
-        if "permission denied" in stderr:
-            ui.muted("  The SSH key may not match the key pair used during provisioning.")
-            ui.muted(f"  Key used: {self.config.ssh_private_key_path}")
-        elif "connection refused" in stderr or "connection timed out" in stderr:
-            ui.muted("  The instance may still be starting, or port 22 is not open to your IP.")
-            ui.muted("  Check your security group allows SSH from your current IP address.")
+        if "connection refused" in stderr or "connection timed out" in stderr:
+            ui.muted("  The instance may still be starting, or port 22 is not open.")
+            ui.muted("  Check your security group allows SSH from the runner's IP.")
         elif "no route to host" in stderr:
             ui.muted("  The IP address may be unreachable. Verify the instance is running.")
         else:
             ui.muted(f"  {result.stderr.strip()}")
 
-        ui.newline()
-        ui.muted(f"When resolved, re-run: [brand]iblai infra setup {self.state.name}[/brand]")
         ui.newline()
         return False
 
