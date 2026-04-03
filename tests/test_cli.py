@@ -602,7 +602,6 @@ class TestServiceUpdateCommand:
         assert "--host" in result.stdout
         assert "--ssh-key" in result.stdout
         assert "--git-token" in result.stdout
-        assert "--aws-key-id" in result.stdout
 
     def test_ssh_key_not_found(self, tmp_path):
         args = [
@@ -610,8 +609,6 @@ class TestServiceUpdateCommand:
             "--host", "10.0.1.50",
             "--ssh-key", "/nonexistent/key.pem",
             "--git-token", "ghp_test",
-            "--aws-key-id", "AKIATEST",
-            "--aws-secret-key", "secret",
         ]
         result = runner.invoke(app, args)
         assert result.exit_code != 0

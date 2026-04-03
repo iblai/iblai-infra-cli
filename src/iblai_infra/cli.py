@@ -881,17 +881,13 @@ def service_update(
     host: str = typer.Option(..., "--host", help="Target server IP address"),
     ssh_key: Path = typer.Option(..., "--ssh-key", help="Path to SSH private key"),
     git_token: str = typer.Option(..., "--git-token", help="GitHub Personal Access Token"),
-    aws_key_id: str = typer.Option(..., "--aws-key-id", help="AWS access key ID"),
-    aws_secret_key: str = typer.Option(..., "--aws-secret-key", help="AWS secret access key"),
     ssh_user: str = typer.Option("ubuntu", "--ssh-user", help="SSH user"),
-    aws_region: str = typer.Option("us-east-1", "--aws-region", help="AWS region"),
     name: str | None = typer.Option(None, "--name", help="Project name (auto-generated from host if omitted)"),
 ) -> None:
     """Update container images and restart services. No infra changes, no secret rotation."""
     _run_service_update(
         host=host, ssh_key=ssh_key, git_token=git_token,
-        aws_key_id=aws_key_id, aws_secret_key=aws_secret_key,
-        ssh_user=ssh_user, aws_region=aws_region, name=name,
+        ssh_user=ssh_user, name=name,
     )
 
 
@@ -900,10 +896,7 @@ def _run_service_update(
     host: str,
     ssh_key: Path,
     git_token: str,
-    aws_key_id: str,
-    aws_secret_key: str,
     ssh_user: str,
-    aws_region: str,
     name: str | None,
 ) -> None:
     """Install latest images and restart all services."""
@@ -948,15 +941,15 @@ def _run_service_update(
         ui.error("ansible-playbook not found. Install with: pip install ansible-core")
         raise typer.Exit(1)
 
-    # Build SetupConfig with minimal values (only SSH + AWS + git needed)
+    # Build SetupConfig with minimal values (only SSH + git needed)
     setup_config = SetupConfig(
         ssh_private_key_path=ssh_key,
         ssh_user=ssh_user,
         target_host=host,
         base_domain="service-update",
-        aws_access_key_id=aws_key_id,
-        aws_secret_access_key=aws_secret_key,
-        aws_default_region=aws_region,
+        aws_access_key_id="",
+        aws_secret_access_key="",
+        aws_default_region="us-east-1",
         git_access_token=git_token,
     )
 
@@ -976,9 +969,9 @@ def _run_service_update(
                 environment=Environment.DEV,
                 credentials=AWSCredentials(
                     method=AuthMethod.ACCESS_KEY,
-                    access_key_id=aws_key_id,
-                    secret_access_key=aws_secret_key,
-                    region=aws_region,
+                    access_key_id="",
+                    secret_access_key="",
+                    region="us-east-1",
                 ),
                 network=NetworkConfig(vpc_cidr="10.0.0.0/16", vpn_ip="0.0.0.0"),
                 compute=ComputeConfig(),
