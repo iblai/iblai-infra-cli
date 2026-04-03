@@ -587,6 +587,37 @@ class TestLaunchCommand:
 
 
 # ---------------------------------------------------------------------------
+# service-update command
+# ---------------------------------------------------------------------------
+
+
+class TestServiceUpdateCommand:
+    def test_missing_required_flags(self):
+        result = runner.invoke(app, ["infra", "service-update"])
+        assert result.exit_code != 0
+
+    def test_help_shows_service_update(self):
+        result = runner.invoke(app, ["infra", "service-update", "--help"])
+        assert result.exit_code == 0
+        assert "--host" in result.stdout
+        assert "--ssh-key" in result.stdout
+        assert "--git-token" in result.stdout
+        assert "--aws-key-id" in result.stdout
+
+    def test_ssh_key_not_found(self, tmp_path):
+        args = [
+            "infra", "service-update",
+            "--host", "10.0.1.50",
+            "--ssh-key", "/nonexistent/key.pem",
+            "--git-token", "ghp_test",
+            "--aws-key-id", "AKIATEST",
+            "--aws-secret-key", "secret",
+        ]
+        result = runner.invoke(app, args)
+        assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
 # permissions command
 # ---------------------------------------------------------------------------
 

@@ -229,6 +229,7 @@ def infra_root(ctx: typer.Context) -> None:
         ("iblai infra resetup <name>", "Re-setup with new domain and secrets"),
         ("iblai infra launch-env", "Launch from .env file (interactive confirm)"),
         ("iblai infra launch --ami-id ...", "Launch from AMI (non-interactive, CI/CD)"),
+        ("iblai infra service-update", "Update images and restart services"),
         ("iblai infra destroy <name>", "Destroy existing infrastructure"),
         ("iblai infra status <name>", "Show infrastructure details and outputs"),
         ("iblai infra list", "List all managed environments"),
@@ -870,6 +871,157 @@ def _run_launch(
         ui.info(f"SSH: [highlight]ssh -i {ssh_key} {ssh_user}@{instance_ip}[/highlight]")
         ui.newline()
         ui.muted(f"To destroy: [brand]iblai infra destroy {project_name}[/brand]")
+        ui.newline()
+    else:
+        raise typer.Exit(1)
+
+
+@infra_app.command(name="service-update")
+def service_update(
+    host: str = typer.Option(..., "--host", help="Target server IP address"),
+    ssh_key: Path = typer.Option(..., "--ssh-key", help="Path to SSH private key"),
+    git_token: str = typer.Option(..., "--git-token", help="GitHub Personal Access Token"),
+    aws_key_id: str = typer.Option(..., "--aws-key-id", help="AWS access key ID"),
+    aws_secret_key: str = typer.Option(..., "--aws-secret-key", help="AWS secret access key"),
+    ssh_user: str = typer.Option("ubuntu", "--ssh-user", help="SSH user"),
+    aws_region: str = typer.Option("us-east-1", "--aws-region", help="AWS region"),
+    name: str | None = typer.Option(None, "--name", help="Project name (auto-generated from host if omitted)"),
+) -> None:
+    """Update container images and restart services. No infra changes, no secret rotation."""
+    _run_service_update(
+        host=host, ssh_key=ssh_key, git_token=git_token,
+        aws_key_id=aws_key_id, aws_secret_key=aws_secret_key,
+        ssh_user=ssh_user, aws_region=aws_region, name=name,
+    )
+
+
+def _run_service_update(
+    *,
+    host: str,
+    ssh_key: Path,
+    git_token: str,
+    aws_key_id: str,
+    aws_secret_key: str,
+    ssh_user: str,
+    aws_region: str,
+    name: str | None,
+) -> None:
+    """Install latest images and restart all services."""
+    import os
+    import shutil
+    from datetime import datetime, timezone
+
+    from iblai_infra.ansible.runner import AnsibleRunner, SERVICE_UPDATE_ROLE_LABELS
+    from iblai_infra.models import (
+        AWSCredentials,
+        AuthMethod,
+        CertificateConfig,
+        CertMethod,
+        ComputeConfig,
+        DNSConfig,
+        Environment,
+        InfraConfig,
+        NetworkConfig,
+        ProjectState,
+        SetupConfig,
+        SSHConfig,
+        SSHKeyMethod,
+    )
+    from iblai_infra.terraform.state import WORKSPACE_ROOT
+
+    # Derive project name
+    project_name = name or host.replace(".", "-")
+    if len(project_name) > 32:
+        project_name = project_name[:32]
+
+    # Validate SSH key
+    ssh_key = Path(ssh_key).expanduser()
+    if not ssh_key.exists():
+        ui.error(f"SSH key not found: {ssh_key}")
+        raise typer.Exit(1)
+    mode = ssh_key.stat().st_mode & 0o777
+    if mode > 0o600:
+        os.chmod(ssh_key, 0o600)
+
+    # Check ansible
+    if shutil.which("ansible-playbook") is None:
+        ui.error("ansible-playbook not found. Install with: pip install ansible-core")
+        raise typer.Exit(1)
+
+    # Build SetupConfig with minimal values (only SSH + AWS + git needed)
+    setup_config = SetupConfig(
+        ssh_private_key_path=ssh_key,
+        ssh_user=ssh_user,
+        target_host=host,
+        base_domain="service-update",
+        aws_access_key_id=aws_key_id,
+        aws_secret_access_key=aws_secret_key,
+        aws_default_region=aws_region,
+        git_access_token=git_token,
+    )
+
+    # Create or update state
+    workspace_path = str(WORKSPACE_ROOT / f"{project_name}-service-update")
+    existing = load_state(project_name)
+    if existing is not None:
+        state = existing
+        state.outputs = {"instance_public_ip": host}
+    else:
+        state = ProjectState(
+            name=project_name,
+            provider="service-update",
+            status="created",
+            config=InfraConfig(
+                project_name=project_name,
+                environment=Environment.DEV,
+                credentials=AWSCredentials(
+                    method=AuthMethod.ACCESS_KEY,
+                    access_key_id=aws_key_id,
+                    secret_access_key=aws_secret_key,
+                    region=aws_region,
+                ),
+                network=NetworkConfig(vpc_cidr="10.0.0.0/16", vpn_ip="0.0.0.0"),
+                compute=ComputeConfig(),
+                ssh=SSHConfig(
+                    method=SSHKeyMethod.EXISTING_FILE,
+                    key_name="service-update",
+                    private_key_path=ssh_key,
+                ),
+                certificates=CertificateConfig(method=CertMethod.NONE),
+                dns=DNSConfig(base_domain="service-update"),
+            ),
+            outputs={"instance_public_ip": host},
+            workspace_path=workspace_path,
+        )
+    save_state(state)
+
+    ui.info(f"Updating services on [highlight]{host}[/highlight]")
+    ui.info(f"Project: [highlight]{project_name}[/highlight]")
+    ui.newline()
+
+    runner = AnsibleRunner(
+        state, setup_config,
+        playbook="service_update_playbook.yml",
+        role_labels=SERVICE_UPDATE_ROLE_LABELS,
+    )
+
+    if not runner.preflight():
+        raise typer.Exit(1)
+
+    runner.setup()
+
+    try:
+        success = runner.run()
+    except KeyboardInterrupt:
+        ui.newline()
+        state.setup_status = "failed"
+        state.updated_at = datetime.now(timezone.utc)
+        save_state(state)
+        ui.abort("Interrupted.")
+
+    if success:
+        ui.newline()
+        ui.success(f"Service update complete on [highlight]{host}[/highlight]")
         ui.newline()
     else:
         raise typer.Exit(1)
