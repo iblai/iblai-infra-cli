@@ -150,44 +150,54 @@
   become: false
   shell: |
     cd {{ ibl_root }}/app/ibl-spa/mentor/ && docker compose down 2>/dev/null; docker compose up -d
+    echo "Mentor container started, waiting 30s for initial boot..."
+    sleep 30
+    STATUS=$(docker ps --filter "name=mentor" --format "{{ '{{' }}.Status{{ '}}' }}")
+    HTTP=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5001/ 2>/dev/null || echo "000")
+    echo "Container status: $STATUS | HTTP: $HTTP"
   args:
     executable: /bin/bash
   environment:
     HOME: "/home/{{ ansible_user }}"
 
-- name: Wait for Mentor SPA initial startup
+- name: Wait for Mentor SPA to be ready (with debug)
   become: false
   shell: |
-    curl -s -o /dev/null -w '%{http_code}' http://localhost:5001/ 2>/dev/null | grep -qE '^(200|301|302)$'
+    HTTP=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5001/ 2>/dev/null)
+    echo "Mentor HTTP: $HTTP"
+    if echo "$HTTP" | grep -qE '^(200|301|302)$'; then
+      exit 0
+    fi
+    # If empty reply, try a restart
+    if [ "$HTTP" = "000" ]; then
+      echo "Empty reply detected, restarting mentor..."
+      cd {{ ibl_root }}/app/ibl-spa/mentor/ && docker compose restart 2>/dev/null
+      sleep 15
+      HTTP=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5001/ 2>/dev/null)
+      echo "After restart: HTTP $HTTP"
+      echo "$HTTP" | grep -qE '^(200|301|302)$'
+    else
+      exit 1
+    fi
   args:
     executable: /bin/bash
   register: mentor_health
   until: mentor_health.rc == 0
-  retries: 6
-  delay: 15
+  retries: 10
+  delay: 20
   ignore_errors: true
 
-- name: Force restart Mentor SPA if not healthy
+- name: Show Mentor SPA final status
   become: false
   shell: |
-    cd {{ ibl_root }}/app/ibl-spa/mentor/ && docker compose restart
+    HTTP=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5001/ 2>/dev/null)
+    STATUS=$(docker ps --filter "name=mentor" --format "{{ '{{' }}.Names{{ '}}' }}: {{ '{{' }}.Status{{ '}}' }}")
+    echo "Final - HTTP: $HTTP | Container: $STATUS"
+    docker logs mentor-mentor_spa-1 --tail 5 2>&1
   args:
     executable: /bin/bash
   environment:
     HOME: "/home/{{ ansible_user }}"
-  when: mentor_health.rc != 0
-
-- name: Wait for Mentor SPA to be ready
-  become: false
-  shell: |
-    curl -s -o /dev/null -w '%{http_code}' http://localhost:5001/ 2>/dev/null | grep -qE '^(200|301|302)$'
-  args:
-    executable: /bin/bash
-  register: mentor_health_final
-  until: mentor_health_final.rc == 0
-  retries: 10
-  delay: 15
-  ignore_errors: true
 
 - name: Restart Skills SPA
   become: false
