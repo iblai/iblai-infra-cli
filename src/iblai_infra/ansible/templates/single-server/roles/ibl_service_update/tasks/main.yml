@@ -155,7 +155,7 @@
   environment:
     HOME: "/home/{{ ansible_user }}"
 
-- name: Wait for Mentor SPA to be ready
+- name: Wait for Mentor SPA initial startup
   become: false
   shell: |
     curl -s -o /dev/null -w '%{http_code}' http://localhost:5001/ 2>/dev/null | grep -qE '^(200|301|302)$'
@@ -163,6 +163,28 @@
     executable: /bin/bash
   register: mentor_health
   until: mentor_health.rc == 0
+  retries: 6
+  delay: 15
+  ignore_errors: true
+
+- name: Force restart Mentor SPA if not healthy
+  become: false
+  shell: |
+    cd {{ ibl_root }}/app/ibl-spa/mentor/ && docker compose restart
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+  when: mentor_health.rc != 0
+
+- name: Wait for Mentor SPA to be ready
+  become: false
+  shell: |
+    curl -s -o /dev/null -w '%{http_code}' http://localhost:5001/ 2>/dev/null | grep -qE '^(200|301|302)$'
+  args:
+    executable: /bin/bash
+  register: mentor_health_final
+  until: mentor_health_final.rc == 0
   retries: 10
   delay: 15
 
