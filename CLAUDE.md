@@ -146,6 +146,35 @@ Accepts `--domain <domain>` or `--ingress <name>` (resolved from the ingress reg
 
 Sets `state.provider = "launch"` to distinguish from interactive provisioning.
 
+### Service Update Command
+
+`iblai infra service-update` — updates container images and restarts services without infrastructure changes or secret rotation. Two modes:
+
+**`--host` mode:** Updates an existing server directly (Ansible only).
+**`--ami-id` mode:** Launches EC2 from AMI via boto3, runs Ansible service update, registers in ALB target group.
+
+**Ansible flow (`service_update_playbook.yml`, 2 roles):**
+1. **`ibl_cli_ops`** — installs `iblai-images[sumac]` from `iblai/iblai-prod-images@{prod_images_tag}` (default: main)
+2. **`ibl_service_update`** — the hardened service restart sequence:
+   - Restore postgres data dir ownership to 999:999
+   - ECR login (uses server's existing AWS creds)
+   - Config save (platform + tutor — regenerates compose files)
+   - Ensure edX running (`ibl edx start -d`) + wait for LMS health
+   - Ensure DM containers running (`docker compose up -d`) + wait for DM health (60 retries for collectstatic)
+   - DM migrations (`migrate --noinput`)
+   - Force restart all SPAs (`docker compose down; docker compose up -d`) + health checks
+   - Proxy reload + nginx restart
+
+**Key learnings baked into this flow:**
+- DM `collectstatic` takes 10-15 min on cold boot — never use `ibl dm update` (force-recreates containers)
+- Mentor SPA doesn't auto-start from AMI — must use `down + up`, not just `up -d`
+- Postgres data dir gets chowned to ubuntu by pre-tasks — must restore to uid 999
+- `--prod-images-tag` flag controls which version of `iblai-prod-images` to install
+
+**AWS helpers** (`providers/aws.py`): `launch_instance`, `wait_for_instance_running`, `register_target`, `terminate_instance`
+
+**GitHub Actions integration** (`iblai/iblai-web-ops`): reusable workflow adds temp SSH SG rule for runner IP, runs service-update, revokes rule. Uses `CI=true` detection for plain text output.
+
 ### Ingress System
 
 Pre-provisioned domain endpoints (DNS + ACM certs + ALB listener) that environments can be assigned to. Eliminates cert validation and DNS propagation delays during resetup/launch.
