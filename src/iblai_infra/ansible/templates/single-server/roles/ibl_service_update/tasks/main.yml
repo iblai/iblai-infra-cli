@@ -237,7 +237,7 @@
   environment:
     HOME: "/home/{{ ansible_user }}"
     IBL_ROOT: "{{ ibl_root }}/"
-  timeout: 300
+  timeout: 600
 
 - name: Run DM auth setup
   become: false
@@ -253,7 +253,7 @@
   environment:
     HOME: "/home/{{ ansible_user }}"
     IBL_ROOT: "{{ ibl_root }}/"
-  timeout: 120
+  timeout: 600
 
 - name: Sync edX with DM
   become: false
@@ -269,7 +269,7 @@
   environment:
     HOME: "/home/{{ ansible_user }}"
     IBL_ROOT: "{{ ibl_root }}/"
-  timeout: 300
+  timeout: 600
   ignore_errors: true
 
 - name: Recreate SPA SSO OAuth app in LMS
