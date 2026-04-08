@@ -280,22 +280,23 @@
     eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
     pyenv activate "{{ venv_name }}"
 
-    # Read the actual SSO client credentials from LMS database (source of truth)
+    # Read SSO client credentials from LMS database (source of truth)
+    # Use grep with a unique marker to avoid Django startup noise
     SSO_CREDS=$(docker exec ibl_prod_lms ./manage.py lms shell -c "
     from oauth2_provider.models import Application
     try:
         app = Application.objects.get(name='spa-sso')
-        print(f'{app.client_id}|{app.client_secret}')
+        print('SSO_RESULT:' + app.client_id + '|' + app.client_secret)
     except Application.DoesNotExist:
-        print('MISSING')
-    " 2>/dev/null | tail -1)
+        print('SSO_RESULT:MISSING')
+    " 2>/dev/null | grep '^SSO_RESULT:' | sed 's/^SSO_RESULT://')
 
-    IFS='|' read SSO_CLIENT_ID SSO_CLIENT_SECRET <<< "$SSO_CREDS"
-
-    if [ "$SSO_CREDS" = "MISSING" ] || [ -z "$SSO_CLIENT_ID" ]; then
+    if [ -z "$SSO_CREDS" ] || [ "$SSO_CREDS" = "MISSING" ]; then
       echo "No spa-sso app in LMS, skipping"
     else
+      IFS='|' read SSO_CLIENT_ID SSO_CLIENT_SECRET <<< "$SSO_CREDS"
       echo "SSO client_id: ${SSO_CLIENT_ID:0:15}..."
+      echo "SSO secret: ${SSO_CLIENT_SECRET:0:10}..."
 
       # Write back to config so Auth SPA env.js picks it up
       ibl config save --set "IBL_SPA.EDX_SSO_CLIENT_ID=$SSO_CLIENT_ID" 2>/dev/null
@@ -306,10 +307,10 @@
       from oauth2_provider.models import Application
       try:
           app = Application.objects.get(name='ibl_web')
-          print(app.client_id)
+          print('WEB_RESULT:' + app.client_id)
       except Application.DoesNotExist:
-          print('')
-      " 2>/dev/null | tail -1)
+          print('WEB_RESULT:')
+      " 2>/dev/null | grep '^WEB_RESULT:' | sed 's/^WEB_RESULT://')
 
       if [ -n "$IBL_WEB_ID" ]; then
         ibl config save --set "IBL_SPA.AUTH.IBL_OAUTH2_CLIENT_ID=$IBL_WEB_ID" 2>/dev/null
