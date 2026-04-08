@@ -379,8 +379,25 @@ def register_target(
     instance_id: str,
     port: int = 80,
 ) -> None:
-    """Register an instance in an ALB target group."""
+    """Deregister existing targets, then register the new instance."""
     elbv2 = session.client("elbv2")
+
+    # Deregister any existing targets to prevent split-brain routing
+    try:
+        existing = elbv2.describe_target_health(TargetGroupArn=target_group_arn)
+        old_targets = [
+            {"Id": t["Target"]["Id"], "Port": t["Target"]["Port"]}
+            for t in existing.get("TargetHealthDescriptions", [])
+            if t["Target"]["Id"] != instance_id
+        ]
+        if old_targets:
+            elbv2.deregister_targets(
+                TargetGroupArn=target_group_arn,
+                Targets=old_targets,
+            )
+    except Exception:
+        pass  # Best-effort cleanup
+
     elbv2.register_targets(
         TargetGroupArn=target_group_arn,
         Targets=[{"Id": instance_id, "Port": port}],
