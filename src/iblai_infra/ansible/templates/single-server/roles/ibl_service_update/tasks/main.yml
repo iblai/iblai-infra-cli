@@ -331,6 +331,49 @@
   ignore_errors: true
 
 # ---------------------------------------------------------------------------
+# Ensure Playwright test users exist in LMS with correct password
+# ---------------------------------------------------------------------------
+
+- name: Ensure all browser test users exist in LMS
+  become: false
+  shell: |
+    USERS="iblaiuserchromenew@ibleducation.com iblaiuserfirefoxnew@ibleducation.com iblaiusersafarinew@ibleducation.com iblaiuseredgenew@ibleducation.com"
+    PASSWORD="ibledu_2024"
+    CREATED=0
+    UPDATED=0
+    for EMAIL in $USERS; do
+      USERNAME=$(echo "$EMAIL" | cut -d@ -f1)
+      RESULT=$(docker exec ibl_prod_lms ./manage.py lms shell -c "
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    try:
+        u = User.objects.get(email='${EMAIL}')
+        u.set_password('${PASSWORD}')
+        u.is_active = True
+        u.save()
+        print('USER_RESULT=UPDATED')
+    except User.DoesNotExist:
+        u = User.objects.create_user(username='${USERNAME}', email='${EMAIL}', password='${PASSWORD}', is_active=True)
+        print('USER_RESULT=CREATED')
+    " 2>/dev/null | grep '^USER_RESULT=' | sed 's/^USER_RESULT=//')
+      if [ "$RESULT" = "CREATED" ]; then
+        echo "Created $EMAIL"
+        CREATED=$((CREATED + 1))
+      elif [ "$RESULT" = "UPDATED" ]; then
+        echo "Password reset for $EMAIL"
+        UPDATED=$((UPDATED + 1))
+      else
+        echo "Warning - could not process $EMAIL"
+      fi
+    done
+    echo "Test users - created=$CREATED updated=$UPDATED"
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+  ignore_errors: true
+
+# ---------------------------------------------------------------------------
 # Nginx + proxy reload
 # ---------------------------------------------------------------------------
 
@@ -423,7 +466,11 @@
   args:
     executable: /bin/bash
   register: smoke_login
-  ignore_errors: true
+
+- name: "Smoke test - fail fast if SSO login broken"
+  ansible.builtin.fail:
+    msg: "SSO login failed for {{ smoke_login.stdout_lines | select('match', '^FAIL') | list | join(', ') }}. Fix test users before running Playwright tests."
+  when: smoke_login.rc != 0 and (smoke_login.stdout | default('')) is not search('SKIP')
 
 - name: "Smoke test - verify DM API responds"
   become: false
