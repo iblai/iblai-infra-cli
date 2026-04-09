@@ -20,11 +20,17 @@
 - name: Show ibl edx launch output
   debug:
     var: edx_launch_result.stdout_lines
+  when: edx_launch_result.stdout_lines is defined
+
+- name: Fail if ibl edx launch timed out
+  fail:
+    msg: "ibl edx launch timed out after 3600s. SSH in and run 'ibl edx launch' manually."
+  when: edx_launch_result is mapping and edx_launch_result.timedout is defined
 
 - name: Fail if ibl edx launch failed
   fail:
     msg: "ibl edx launch failed with exit code {{ edx_launch_result.rc }}"
-  when: edx_launch_result.rc != 0
+  when: edx_launch_result.rc is defined and edx_launch_result.rc != 0
 
 - name: Verify edX containers are running
   become: false

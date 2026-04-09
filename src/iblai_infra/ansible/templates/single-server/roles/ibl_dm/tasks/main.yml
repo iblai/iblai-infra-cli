@@ -55,18 +55,24 @@
   environment:
     HOME: "/home/{{ ansible_user }}"
     IBL_ROOT: "{{ ibl_root }}/"
-  timeout: 1800
+  timeout: 3600
   register: dm_launch_result
   ignore_errors: true
 
 - name: Show ibl dm launch output
   debug:
     var: dm_launch_result.stdout_lines
+  when: dm_launch_result.stdout_lines is defined
+
+- name: Fail if ibl dm launch timed out
+  fail:
+    msg: "ibl dm launch timed out after 3600s. SSH in and run 'ibl dm launch' manually."
+  when: dm_launch_result is mapping and dm_launch_result.timedout is defined
 
 - name: Fail if ibl dm launch failed
   fail:
     msg: "ibl dm launch failed with exit code {{ dm_launch_result.rc }}"
-  when: dm_launch_result.rc != 0
+  when: dm_launch_result.rc is defined and dm_launch_result.rc != 0
 
 - name: Verify DM containers are running
   become: false
