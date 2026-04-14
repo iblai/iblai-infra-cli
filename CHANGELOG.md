@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.0] — 2026-04-14
+
+### Added
+- **Multi-server deployment type** — `iblai infra provision` now offers a deployment type selector: single-server (existing) or multi-server. Multi-server provisions N app servers (2-10) in public subnets behind an ALB + 1 services server in a private subnet, with optional managed RDS MySQL/PostgreSQL and Redis ElastiCache
+- **`DeploymentType` enum** — `SINGLE` / `MULTI` on `InfraConfig`, defaults to `SINGLE` for backward compatibility
+- **`MultiServerConfig` model** — app server count/type/volume, services server type/volume, managed service toggles. DB passwords and Redis auth tokens generated at runtime, excluded from state serialization via `Field(exclude=True)`
+- **Multi-server Terraform templates** (`templates/aws/multi-server/`) — VPC with 4 subnet tiers (public/private/database/cache), NAT gateways per AZ, 6 security groups (ALB, app, services, RDS, Redis, EFS), EFS shared media storage, optional RDS MySQL 8.4 + PostgreSQL 15 (multi-AZ), optional Redis ElastiCache (multi-AZ, encrypted)
+- **Multi-server wizard prompts** — interactive configuration for app server count, instance types, volume sizes, managed database and Redis toggles
+- **Multi-server review panel** — shows server counts, managed services status, subnet tiers
+- **`launch` multi-server flags** — `--deployment-type`, `--app-server-count`, `--services-instance-type`, `--services-volume-size`, `--enable-mysql`, `--enable-postgres`, `--enable-redis`
+- **Type column in `list` command** — shows `single` or `multi (N)` for each environment
+- **New resource labels** — NAT Gateway, Elastic IP, RDS Database, DB Subnet Group, Redis Cluster, Cache Subnet Group, EFS File System, EFS Mount Target
+- **Terraform gitignore entries** — `.terraform/`, `*.tfvars`, `*.tfstate` added to `.gitignore`
+
 ## [1.3.1] — 2026-04-07
 
 ### Added
