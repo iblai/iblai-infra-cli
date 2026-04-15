@@ -476,10 +476,14 @@ def _run_retry(name: str) -> None:
 @infra_app.command()
 def setup(
     name: str = typer.Argument(None, help="Project name (from provision). Omit to set up an existing server."),
+    env_file: Path | None = typer.Option(None, "--env-file", "-f", help="Path to .env file for non-interactive setup"),
 ) -> None:
-    """Set up the IBL platform on a server."""
+    """Set up the IBL platform on a server.
+
+    With --env-file, runs non-interactively using values from the file.
+    """
     if name:
-        _run_setup_provisioned(name)
+        _run_setup_provisioned(name, env_file=env_file)
     else:
         _run_setup_interactive()
 
@@ -1454,7 +1458,7 @@ def _run_resetup(name: str) -> None:
     _confirm_and_run(state, setup_config, f"iblai infra resetup {name}")
 
 
-def _run_setup_provisioned(name: str) -> None:
+def _run_setup_provisioned(name: str, env_file: Path | None = None) -> None:
     """Set up a Terraform-provisioned environment by name."""
     from iblai_infra.models import DeploymentType
 
@@ -1510,7 +1514,7 @@ def _run_setup_provisioned(name: str) -> None:
         raise typer.Exit(1)
 
     if is_multi:
-        _run_setup_multi(state)
+        _run_setup_multi(state, env_file=env_file)
     else:
         from iblai_infra.prompts.setup import prompt_setup
 
@@ -1523,13 +1527,12 @@ def _run_setup_provisioned(name: str) -> None:
         _confirm_and_run(state, setup_config, f"iblai infra setup {name}")
 
 
-def _run_setup_multi(state) -> None:
+def _run_setup_multi(state, env_file: Path | None = None) -> None:
     """Set up a multi-server deployment: services server first, then app servers."""
     from datetime import datetime, timezone
 
     from iblai_infra.ansible.runner import AnsibleRunner, SERVICES_ROLE_LABELS
-    from iblai_infra.models import generate_password
-    from iblai_infra.prompts.setup import prompt_setup
+    from iblai_infra.models import SetupConfig, generate_password
     from iblai_infra.terraform.state import read_tfvar
 
     outputs = state.outputs or {}
@@ -1553,12 +1556,64 @@ def _run_setup_multi(state) -> None:
     # ---- Generate MongoDB password (not Terraform-managed) ----
     mongo_password = generate_password()
 
-    # ---- Collect user input (SSH, domain, credentials) ----
-    try:
-        setup_config = prompt_setup(state, env_config="isolated-services")
-    except KeyboardInterrupt:
-        ui.newline()
-        ui.abort("Interrupted.")
+    # ---- Collect config: from .env file or interactive prompts ----
+    if env_file:
+        if not env_file.exists():
+            ui.error(f"Env file not found: {env_file}")
+            raise typer.Exit(1)
+        env = _load_env_file(env_file)
+
+        # Required
+        required = {
+            "GIT_TOKEN": "GitHub Personal Access Token",
+            "AWS_ACCESS_KEY_ID": "AWS access key ID",
+            "AWS_SECRET_ACCESS_KEY": "AWS secret access key",
+            "ECR_ACCOUNT_ID": "ECR AWS account ID",
+        }
+        missing = [f"{desc} ({key})" for key, desc in required.items() if not env.get(key)]
+        if missing:
+            ui.error("Missing required variables in env file:")
+            for m in missing:
+                ui.muted(f"  - {m}")
+            raise typer.Exit(1)
+
+        # Resolve SSH key from state
+        ssh_key = state.config.ssh.private_key_path
+        if not ssh_key or not ssh_key.exists():
+            ssh_key_str = env.get("SSH_KEY_PATH", "")
+            if ssh_key_str:
+                ssh_key = Path(ssh_key_str).expanduser()
+            else:
+                ui.error("No SSH key found in state or env file (SSH_KEY_PATH)")
+                raise typer.Exit(1)
+
+        setup_config = SetupConfig(
+            ssh_private_key_path=ssh_key,
+            target_host=services_ip,
+            base_domain=state.config.dns.base_domain,
+            env_config="isolated-services",
+            cli_ops_release_tag=env.get("CLI_TAG", "3.19.0"),
+            prod_images_tag=env.get("PROD_IMAGES_TAG", "main"),
+            enable_ai=env.get("ENABLE_AI", "true").lower() in ("true", "1", "yes"),
+            aws_access_key_id=env["AWS_ACCESS_KEY_ID"],
+            aws_secret_access_key=env["AWS_SECRET_ACCESS_KEY"],
+            aws_default_region=env.get("AWS_DEFAULT_REGION", state.config.credentials.region),
+            git_access_token=env["GIT_TOKEN"],
+            ecr_account_id=env["ECR_ACCOUNT_ID"],
+            ecr_region=env.get("ECR_REGION", "us-east-1"),
+            openai_api_key=env.get("OPENAI_API_KEY", ""),
+            admin_username=env.get("ADMIN_USERNAME", "ibl_admin"),
+            admin_email=env.get("ADMIN_EMAIL", ""),
+            admin_password=env.get("ADMIN_PASSWORD", ""),
+        )
+    else:
+        from iblai_infra.prompts.setup import prompt_setup
+
+        try:
+            setup_config = prompt_setup(state, env_config="isolated-services")
+        except KeyboardInterrupt:
+            ui.newline()
+            ui.abort("Interrupted.")
 
     # ---- Populate multi-server fields on SetupConfig ----
     setup_config.deployment_type = "multi-server"
@@ -1603,14 +1658,15 @@ def _run_setup_multi(state) -> None:
 
     ui.summary_panel("Multi-Server Setup Summary", rows)
 
-    confirm = questionary.confirm(
-        "Proceed with services server setup?",
-        default=True,
-        style=ui.PROMPT_STYLE,
-        qmark=ui.QMARK,
-    ).ask()
-    if not confirm:
-        ui.abort("Cancelled.")
+    if not env_file:
+        confirm = questionary.confirm(
+            "Proceed with services server setup?",
+            default=True,
+            style=ui.PROMPT_STYLE,
+            qmark=ui.QMARK,
+        ).ask()
+        if not confirm:
+            ui.abort("Cancelled.")
 
     # ---- Phase 1: Services server bootstrap ----
     ui.newline()
