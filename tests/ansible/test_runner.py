@@ -431,13 +431,14 @@ class TestGenerateInventoryMultiServer:
         content = (tmp_path / "inventory.ini").read_text()
         assert "[services_servers]" in content
         assert "10.0.11.140" in content
-        assert "ProxyJump=ubuntu@13.212.74.207" in content
+        assert "ProxyCommand" in content
+        assert "ubuntu@13.212.74.207" in content
         assert "ansible_python_interpreter=/usr/bin/python3" in content
 
     def test_single_server_inventory_unchanged(
         self, project_state, setup_config, tmp_path,
     ):
-        """Single-server inventory still uses [ibl_servers] and no ProxyJump."""
+        """Single-server inventory still uses [ibl_servers] and no ProxyCommand."""
         runner = AnsibleRunner.__new__(AnsibleRunner)
         runner.state = project_state
         runner.config = setup_config
@@ -448,7 +449,7 @@ class TestGenerateInventoryMultiServer:
 
         content = (tmp_path / "inventory.ini").read_text()
         assert "[ibl_servers]" in content
-        assert "ProxyJump" not in content
+        assert "ProxyCommand" not in content
 
 
 # ---------------------------------------------------------------------------
@@ -508,16 +509,18 @@ class TestSSHTestMultiServer:
         r.config = multi_server_setup_config
         return r
 
-    def test_ssh_includes_proxy_jump(self, runner):
+    def test_ssh_includes_proxy_command(self, runner):
         mock_result = MagicMock()
         mock_result.returncode = 0
 
         with patch("iblai_infra.ansible.runner.subprocess.run", return_value=mock_result) as mock_run:
             assert runner._test_ssh() is True
             call_args = mock_run.call_args[0][0]
-            assert "-o" in call_args
-            proxy_idx = call_args.index("ProxyJump=ubuntu@13.212.74.207")
-            assert call_args[proxy_idx - 1] == "-o"
+            # Find the ProxyCommand argument
+            proxy_args = [a for a in call_args if "ProxyCommand" in str(a)]
+            assert len(proxy_args) == 1
+            assert "ubuntu@13.212.74.207" in proxy_args[0]
+            assert "-W %h:%p" in proxy_args[0]
 
 
 # ---------------------------------------------------------------------------

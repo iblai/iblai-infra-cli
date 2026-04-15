@@ -335,17 +335,23 @@ class AnsibleRunner:
                 "-i", str(self.config.ssh_private_key_path),
             ]
             if self.config.proxy_jump_host:
-                jump = f"{self.config.ssh_user}@{self.config.proxy_jump_host}"
-                ssh_cmd.extend(["-o", f"ProxyJump={jump}"])
+                jump_key = str(self.config.ssh_private_key_path)
+                jump_user = self.config.ssh_user
+                jump_host = self.config.proxy_jump_host
+                ssh_cmd.extend([
+                    "-o", f"ProxyCommand=ssh -i {jump_key} -o StrictHostKeyChecking=no -W %h:%p {jump_user}@{jump_host}",
+                ])
             ssh_cmd.extend([
                 f"{self.config.ssh_user}@{self.config.target_host}",
                 "true",
             ])
+            # Allow more time when going through a bastion host
+            ssh_timeout = 60 if self.config.proxy_jump_host else 30
             result = subprocess.run(
                 ssh_cmd,
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=ssh_timeout,
             )
 
             if result.returncode == 0:
@@ -417,13 +423,18 @@ class AnsibleRunner:
             f" ansible_user={self.config.ssh_user}"
             f" ansible_ssh_private_key_file={self.config.ssh_private_key_path}"
         )
-        # Add ProxyJump for hosts reachable only via a bastion (e.g. services
-        # server in a private subnet, accessed through an app server).
+        # Add ProxyCommand for hosts reachable only via a bastion (e.g.
+        # services server in a private subnet, accessed through an app
+        # server).  We use ProxyCommand instead of ProxyJump so the jump
+        # host inherits the same private key.
         if self.config.proxy_jump_host:
-            jump = f"{self.config.ssh_user}@{self.config.proxy_jump_host}"
+            jump_key = self.config.ssh_private_key_path
+            jump_user = self.config.ssh_user
+            jump_host = self.config.proxy_jump_host
+            proxy_cmd = f"ssh -i {jump_key} -o StrictHostKeyChecking=no -W %h:%p {jump_user}@{jump_host}"
             host_line += (
-                f" ansible_ssh_common_args="
-                f"'-o ProxyJump={jump} -o StrictHostKeyChecking=no'"
+                f' ansible_ssh_common_args='
+                f"'-o ProxyCommand=\"{proxy_cmd}\" -o StrictHostKeyChecking=no'"
             )
 
         content = (
