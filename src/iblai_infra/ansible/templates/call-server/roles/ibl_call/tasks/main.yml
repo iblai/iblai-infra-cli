@@ -27,13 +27,16 @@
 
 - name: Configure environment profile (call-only)
   become: false
+  # Single-quote the env_config arg to match the shell-quoting convention used by
+  # the single-server ibl_platform role. env_config is CLI-controlled, but we
+  # still don't want a stray space or shell metachar to change command semantics.
   shell: |
     export PYENV_ROOT="{{ pyenv_root }}"
     export PATH="$PYENV_ROOT/bin:$PATH"
     eval "$(pyenv init -)"
     eval "$(pyenv virtualenv-init -)"
     pyenv activate "{{ venv_name }}"
-    ibl config environment {{ env_config | default('call-only') }}
+    ibl config environment '{{ env_config | default("call-only") }}'
   args:
     executable: /bin/bash
   environment:
@@ -80,10 +83,12 @@
 
 - name: Wait for LiveKit API (:7880) to accept connections
   become: false
+  # 300s accommodates a cold-boot ECR pull of the livekit image + startup
+  # (transcoding containers are slower than the API itself).
   wait_for:
     host: 127.0.0.1
     port: 7880
-    timeout: 180
+    timeout: 300
     state: started
 
 - name: Capture call secrets (ibl call show-call-secrets)
@@ -103,6 +108,20 @@
   changed_when: false
   # Secrets printed to the operator terminal via the `debug` task below,
   # never echoed to ansible's default logging.
+  no_log: true
+
+- name: Fail if `ibl call show-call-secrets` produced no output
+  # Don't silently paint an empty "secrets" banner — surface the failure so the
+  # operator knows to ssh in and run the command themselves. `no_log` stays
+  # true because stderr might contain partial secret material on some failure
+  # modes.
+  fail:
+    msg: |
+      `ibl call show-call-secrets` returned no output.
+      SSH in and run it manually:
+        ssh ubuntu@<host>
+        pyenv activate {{ venv_name }} && ibl call show-call-secrets
+  when: call_secrets_result.stdout | default('') | trim | length == 0
   no_log: true
 
 - name: Show call secrets to operator (save these now)
