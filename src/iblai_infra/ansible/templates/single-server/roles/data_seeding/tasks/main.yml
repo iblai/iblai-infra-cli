@@ -26,6 +26,19 @@
   environment:
     HOME: "/home/{{ ansible_user }}"
 
+- name: Seed tools
+  become: false
+  shell: |
+    cd {{ ibl_root }}/app/ibl-dm/ibl-dm-pro/ && docker compose exec -T web ./manage.py seed_tools
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+
+# RBAC must run last — it consumes the resources created by the preceding
+# seeders (flows, llm-registry, base-mentors, tools) when wiring up group
+# memberships and permissions. Re-ordering will leave the platform without
+# the correct role/permission mappings for anything seeded after it.
 - name: Seed RBAC data
   become: false
   shell: |
