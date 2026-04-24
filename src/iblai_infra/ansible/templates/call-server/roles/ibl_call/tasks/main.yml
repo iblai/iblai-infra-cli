@@ -6,10 +6,33 @@
 #   - /ibl exists and is owned by the ansible user
 #
 # Inputs (set in extra-vars):
-#   - base_domain       — FQDN operators will use to reach the call server
+#   - base_domain       — PARENT domain (e.g. "stg1.iblai.org"). `ibl call` auto-
+#                         prepends "call." when generating the LiveKit WS URL, so
+#                         passing "call.stg1.iblai.org" yields wss://call.call.stg1…
+#                         Always pass the parent; let the CLI add the prefix.
 #   - env_config        — should be "call-only"
 #   - aws_*             — ECR auth for image pulls
 #   - git_access_token  — unused here but accepted for parity
+
+# ---------------------------------------------------------------------------
+# IBL_ROOT is required by every `ibl` sub-command on the call server. The
+# single-server stg AMIs have it baked into the login environment; a fresh
+# call-server bootstrap does not. Set it for ALL shell tasks in this role
+# (via each task's environment block), and persist to ~/.bashrc so operator-
+# driven interventions via SSH pick it up automatically.
+# ---------------------------------------------------------------------------
+
+- name: Persist IBL_ROOT export in ~/.bashrc
+  become: false
+  lineinfile:
+    path: "{{ bashrc_path | default('/home/' ~ ansible_user ~ '/.bashrc') }}"
+    line: "export IBL_ROOT={{ ibl_root }}/"
+    regexp: '^export IBL_ROOT='
+    state: present
+    create: true
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
 
 - name: Configure base domain in ibl config
   become: false
@@ -24,6 +47,7 @@
     executable: /bin/bash
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
 
 - name: Configure environment profile (call-only)
   become: false
@@ -41,6 +65,7 @@
     executable: /bin/bash
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
 
 - name: Ensure ibl_local_default docker network exists
   become: false
@@ -83,6 +108,7 @@
     executable: /bin/bash
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
   register: call_start_result
   changed_when: true
 
@@ -109,6 +135,7 @@
     executable: /bin/bash
   environment:
     HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
   register: call_secrets_result
   changed_when: false
   # Secrets printed to the operator terminal via the `debug` task below,

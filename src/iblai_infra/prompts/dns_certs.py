@@ -38,7 +38,15 @@ def prompt_dns_and_certs(
 
     ui.step_header(4, TOTAL_STEPS, "Domain & Certificates")
 
-    prompt_text = "Call server FQDN (e.g. call.example.com):" if is_call_server else "Base domain:"
+    # For call-server the CLI's `ibl call` auto-prepends "call." to BASE_DOMAIN
+    # when generating the LiveKit WS URL. Prompting with "call.example.com"
+    # here used to cause operators to set BASE_DOMAIN=call.<root> which then
+    # produced wss://call.call.<root>. Ask for the PARENT domain instead.
+    prompt_text = (
+        "Call server base domain (WS URL will be wss://call.<this>, e.g. 'iblai.org'):"
+        if is_call_server
+        else "Base domain:"
+    )
 
     # ----- base domain -----
     base_domain = questionary.text(
