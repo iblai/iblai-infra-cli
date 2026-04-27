@@ -25,6 +25,7 @@
   roles:
     - ibl_cli_ops
     - ibl_launch
+    - smtp_config
     - ibl_launch_services
     - integrations
     - admin_setup

@@ -521,6 +521,14 @@ def launch(
         "--create-playwright-platforms/--no-create-playwright-platforms",
         help="Create 8 spa-tests-* platforms + 4 browser superusers + 1 student user for Playwright tests",
     ),
+    # SMTP — `--smtp-host` is the trigger; if empty, the role no-ops
+    smtp_host: str = typer.Option("", "--smtp-host", help="SMTP host (e.g. email-smtp.us-east-1.amazonaws.com). Setting this enables SMTP."),
+    smtp_port: int = typer.Option(587, "--smtp-port", help="SMTP port (default 587 for STARTTLS)"),
+    smtp_username: str = typer.Option("", "--smtp-username", help="SMTP username (e.g. SES IAM access key id)"),
+    smtp_password: str = typer.Option("", "--smtp-password", help="SMTP password"),
+    smtp_sender_email: str = typer.Option("", "--smtp-sender-email", help="SMTP sender email (From: address)"),
+    smtp_use_tls: bool = typer.Option(True, "--smtp-use-tls/--no-smtp-use-tls", help="Use STARTTLS (default true)"),
+    smtp_use_ssl: bool = typer.Option(False, "--smtp-use-ssl/--no-smtp-use-ssl", help="Use implicit SSL/SMTPS (default false)"),
     deployment_type: str = typer.Option("single-server", "--deployment-type", help="single-server, multi-server, or call-server"),
     app_server_count: int = typer.Option(2, "--app-server-count", help="Number of app servers (multi-server only)"),
     services_instance_type: str = typer.Option("t3.2xlarge", "--services-instance-type", help="Services server instance type (multi-server only)"),
@@ -571,6 +579,13 @@ def launch(
         admin_username=admin_username, openai_key=openai_key,
         enable_ai=enable_ai,
         create_playwright_platforms=create_playwright_platforms,
+        smtp_host=smtp_host,
+        smtp_port=smtp_port,
+        smtp_username=smtp_username,
+        smtp_password=smtp_password,
+        smtp_sender_email=smtp_sender_email,
+        smtp_use_tls=smtp_use_tls,
+        smtp_use_ssl=smtp_use_ssl,
         deployment_type=deployment_type,
         app_server_count=app_server_count,
         services_instance_type=services_instance_type,
@@ -675,6 +690,13 @@ def launch_env(
     openai_key = env.get("OPENAI_API_KEY", "")
     enable_ai = env.get("ENABLE_AI", "true").lower() in ("true", "1", "yes")
     create_playwright_platforms = env.get("CREATE_PLAYWRIGHT_PLATFORMS", "false").lower() in ("true", "1", "yes")
+    smtp_host = env.get("SMTP_HOST", "")
+    smtp_port = int(env.get("SMTP_PORT", "587"))
+    smtp_username = env.get("SMTP_USERNAME", "")
+    smtp_password = env.get("SMTP_PASSWORD", "")
+    smtp_sender_email = env.get("SMTP_SENDER_EMAIL", "")
+    smtp_use_tls = env.get("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
+    smtp_use_ssl = env.get("SMTP_USE_SSL", "false").lower() in ("true", "1", "yes")
 
     # Show summary
     project_name = name or domain.replace(".", "-")
@@ -718,6 +740,13 @@ def launch_env(
         admin_username=admin_username, openai_key=openai_key,
         enable_ai=enable_ai,
         create_playwright_platforms=create_playwright_platforms,
+        smtp_host=smtp_host,
+        smtp_port=smtp_port,
+        smtp_username=smtp_username,
+        smtp_password=smtp_password,
+        smtp_sender_email=smtp_sender_email,
+        smtp_use_tls=smtp_use_tls,
+        smtp_use_ssl=smtp_use_ssl,
     )
 
 
@@ -745,6 +774,13 @@ def _run_launch(
     openai_key: str,
     enable_ai: bool,
     create_playwright_platforms: bool = False,
+    smtp_host: str = "",
+    smtp_port: int = 587,
+    smtp_username: str = "",
+    smtp_password: str = "",
+    smtp_sender_email: str = "",
+    smtp_use_tls: bool = True,
+    smtp_use_ssl: bool = False,
     deployment_type: str = "single-server",
     app_server_count: int = 2,
     services_instance_type: str = "t3.2xlarge",
@@ -923,6 +959,14 @@ def _run_launch(
         cli_ops_release_tag=cli_tag,
         enable_ai=enable_ai,
         create_playwright_platforms=create_playwright_platforms,
+        smtp_enabled=bool(smtp_host),
+        smtp_host=smtp_host,
+        smtp_port=smtp_port,
+        smtp_username=smtp_username,
+        smtp_password=smtp_password,
+        smtp_sender_email=smtp_sender_email,
+        smtp_use_tls=smtp_use_tls,
+        smtp_use_ssl=smtp_use_ssl,
         aws_access_key_id=aws_key_id,
         aws_secret_access_key=aws_secret_key,
         aws_default_region=aws_region,

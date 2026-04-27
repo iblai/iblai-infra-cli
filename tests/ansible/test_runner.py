@@ -312,6 +312,12 @@ class TestBuildExtraVars:
         assert extra["cli_ops_release_tag"] == "3.19.0"
         assert extra["is_resetup"] is False
         assert extra["enable_ai"] is True
+        # SMTP fields default to disabled / empty when SetupConfig isn't given them
+        assert extra["smtp_enabled"] is False
+        assert extra["smtp_host"] == ""
+        assert extra["smtp_port"] == 587
+        assert extra["smtp_use_tls"] is True
+        assert extra["smtp_use_ssl"] is False
 
     def test_resetup_extra_vars(self, project_state, resetup_config):
         runner = AnsibleRunner.__new__(AnsibleRunner)
@@ -381,15 +387,15 @@ class TestConstants:
         assert TOTAL_ROLES == len(ROLE_LABELS)
 
     def test_expected_roles(self):
-        expected = {"docker", "awscli", "python", "ibl_cli_ops", "ibl_platform", "ibl_dm", "ibl_edx", "ibl_spa", "integrations", "admin_setup", "data_seeding"}
+        expected = {"docker", "awscli", "python", "ibl_cli_ops", "ibl_platform", "smtp_config", "ibl_dm", "ibl_edx", "ibl_spa", "integrations", "admin_setup", "data_seeding"}
         assert set(ROLE_LABELS.keys()) == expected
 
     def test_launch_role_labels(self):
-        expected = {"ibl_cli_ops", "ibl_launch", "ibl_launch_services", "integrations", "admin_setup", "data_seeding"}
+        expected = {"ibl_cli_ops", "ibl_launch", "smtp_config", "ibl_launch_services", "integrations", "admin_setup", "data_seeding"}
         assert set(LAUNCH_ROLE_LABELS.keys()) == expected
 
     def test_launch_role_labels_count(self):
-        assert len(LAUNCH_ROLE_LABELS) == 6
+        assert len(LAUNCH_ROLE_LABELS) == 7
 
     def test_service_update_role_labels(self):
         expected = {"ibl_cli_ops", "ibl_service_update"}

@@ -41,6 +41,7 @@
     - python
     - ibl_cli_ops
     - ibl_platform
+    - smtp_config
     - ibl_dm
     - ibl_edx
     - ibl_spa

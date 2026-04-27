@@ -318,6 +318,17 @@ class SetupConfig(BaseModel):
     admin_username: str = "ibl_admin"
     admin_email: str = ""
     admin_password: str = ""
+    # SMTP for outbound email (magic-link tests etc.). Disabled by default;
+    # the ansible role no-ops unless smtp_enabled is true. Password is
+    # excluded from serialization so it's never written to state.json.
+    smtp_enabled: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = Field(default="", exclude=True)
+    smtp_sender_email: str = ""
+    smtp_use_tls: bool = True
+    smtp_use_ssl: bool = False
 
 
 # ---------------------------------------------------------------------------

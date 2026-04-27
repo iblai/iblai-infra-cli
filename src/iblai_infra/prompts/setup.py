@@ -140,6 +140,8 @@ def _prompt_platform_config(
     else:
         ui.success("Playwright test platforms: [highlight]Skip[/highlight]")
 
+    smtp_fields = _prompt_smtp_config()
+
     return {
         "base_domain": base_domain,
         "edx_version": edx_version,
@@ -147,6 +149,110 @@ def _prompt_platform_config(
         "cli_ops_release_tag": cli_ops_release_tag,
         "enable_ai": enable_ai,
         "create_playwright_platforms": create_playwright_platforms,
+        **smtp_fields,
+    }
+
+
+def _prompt_smtp_config() -> dict:
+    """Optionally collect SMTP credentials for outbound email.
+
+    Default is "skip" — when answered "no" all eight SMTP fields stay at
+    their model defaults and the ansible role no-ops. When answered "yes",
+    we gather the seven settings that map to the IBL_SMTP_* / IBL_SMTP_SYSTEM_*
+    keys at the root of /ibl/config.yml. Password is collected via
+    `questionary.password` (no echo); none of these values are persisted
+    locally — they ride extra_vars to ansible at run time only.
+    """
+    enabled = questionary.confirm(
+        "Configure SMTP for outbound email (magic-link tests, system mails)?",
+        default=False,
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if enabled is None:
+        ui.abort()
+    if not enabled:
+        ui.success("SMTP: [highlight]Skip[/highlight]")
+        return {"smtp_enabled": False}
+
+    smtp_host = questionary.text(
+        "SMTP host (e.g. email-smtp.us-east-1.amazonaws.com):",
+        validate=lambda v: bool(v.strip()) or "Host is required",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if smtp_host is None:
+        ui.abort()
+    smtp_host = smtp_host.strip()
+
+    smtp_port_str = questionary.text(
+        "SMTP port:",
+        default="587",
+        validate=lambda v: v.strip().isdigit() or "Port must be an integer",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if smtp_port_str is None:
+        ui.abort()
+    smtp_port = int(smtp_port_str.strip())
+
+    smtp_username = questionary.text(
+        "SMTP username:",
+        validate=lambda v: bool(v.strip()) or "Username is required",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if smtp_username is None:
+        ui.abort()
+    smtp_username = smtp_username.strip()
+
+    smtp_password = questionary.password(
+        "SMTP password:",
+        validate=lambda v: bool(v) or "Password is required",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if smtp_password is None:
+        ui.abort()
+
+    smtp_sender_email = questionary.text(
+        "SMTP sender email (e.g. noreply@example.com):",
+        validate=lambda v: "@" in v or "Must be a valid email",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if smtp_sender_email is None:
+        ui.abort()
+    smtp_sender_email = smtp_sender_email.strip()
+
+    smtp_use_tls = questionary.confirm(
+        "Use STARTTLS (port 587)?",
+        default=True,
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if smtp_use_tls is None:
+        ui.abort()
+
+    smtp_use_ssl = questionary.confirm(
+        "Use SMTPS / implicit SSL (port 465)?",
+        default=False,
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if smtp_use_ssl is None:
+        ui.abort()
+
+    ui.success(f"SMTP: [highlight]{smtp_username}@{smtp_host}:{smtp_port}[/highlight]")
+    return {
+        "smtp_enabled": True,
+        "smtp_host": smtp_host,
+        "smtp_port": smtp_port,
+        "smtp_username": smtp_username,
+        "smtp_password": smtp_password,
+        "smtp_sender_email": smtp_sender_email,
+        "smtp_use_tls": smtp_use_tls,
+        "smtp_use_ssl": smtp_use_ssl,
     }
 
 
