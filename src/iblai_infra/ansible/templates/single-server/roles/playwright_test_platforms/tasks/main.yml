@@ -48,7 +48,7 @@
         )
         u.set_password(PASSWORD)
         if u.email != cfg["email"]: u.email = cfg["email"]
-        if u.is_active != True: u.is_active = True
+        if not u.is_active: u.is_active = True
         if u.is_staff != is_staff: u.is_staff = is_staff
         if u.is_superuser != is_super: u.is_superuser = is_super
         if not u.first_name: u.first_name = cfg["first"]
@@ -72,6 +72,10 @@
   register: pw_lms_result
   changed_when: "'CREATED' in (pw_lms_result.stdout | default(''))"
 
+# Match the `Sync edX with DM` pattern in final_steps — ignore errors so a
+# flaky sync run doesn't abort the whole role. The downstream script reports
+# any missing DM users via "skipped" UPL outcomes, so operator still sees what
+# didn't propagate without losing the platforms that were already created.
 - name: Sync Playwright test users from edX to DM
   become: false
   shell: |
@@ -87,6 +91,7 @@
     HOME: "/home/{{ ansible_user }}"
     IBL_ROOT: "{{ ibl_root }}/"
   timeout: 600
+  ignore_errors: true
 
 - name: Copy Playwright platform setup script into DM container
   become: false
