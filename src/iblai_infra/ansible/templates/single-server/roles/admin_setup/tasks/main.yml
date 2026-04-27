@@ -39,22 +39,49 @@
     HOME: "/home/{{ ansible_user }}"
   no_log: true
 
-- name: Create LMS super admin
+# LMS superuser must have first_name + last_name + UserProfile.name set,
+# otherwise skills/enrollment flows that look up the learner's display name
+# render blank and (in some flows) reject the enrollment outright. We
+# derive a default first/last from the admin_username (snake/kebab/dot →
+# title-cased words) and only fill empty fields so a hand-edited name
+# isn't clobbered on re-runs.
+- name: Create LMS super admin (with first_name / last_name / UserProfile.name)
   become: false
   shell: |
     docker exec ibl_prod_lms ./manage.py lms shell -c "
     from django.contrib.auth.models import User
-    if not User.objects.filter(username='{{ admin_username }}').exists():
-        User.objects.create_superuser('{{ admin_username }}', '{{ admin_email }}', '{{ admin_password }}')
+    from common.djangoapps.student.models import UserProfile
+
+    parts = '{{ admin_username }}'.replace('_', ' ').replace('-', ' ').replace('.', ' ').title().split()
+    default_first = parts[0] if parts else 'Admin'
+    default_last = ' '.join(parts[1:]) if len(parts) > 1 else 'User'
+
+    u, created = User.objects.get_or_create(
+        username='{{ admin_username }}',
+        defaults={'email': '{{ admin_email }}'},
+    )
+    if created:
         print('LMS superuser created')
     else:
-        u = User.objects.get(username='{{ admin_username }}')
         u.email = '{{ admin_email }}'
-        u.set_password('{{ admin_password }}')
-        u.is_superuser = True
-        u.is_staff = True
-        u.save()
         print('LMS superuser updated')
+    u.set_password('{{ admin_password }}')
+    u.is_superuser = True
+    u.is_staff = True
+    if not u.first_name:
+        u.first_name = default_first
+    if not u.last_name:
+        u.last_name = default_last
+    u.save()
+
+    profile, _ = UserProfile.objects.get_or_create(
+        user=u,
+        defaults={'name': f'{u.first_name} {u.last_name}'.strip()},
+    )
+    if not profile.name or not profile.name.strip():
+        profile.name = f'{u.first_name} {u.last_name}'.strip() or u.username
+        profile.save()
+        print('LMS superuser UserProfile.name set')
     "
   args:
     executable: /bin/bash
