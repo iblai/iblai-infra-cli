@@ -309,6 +309,7 @@ class SetupConfig(BaseModel):
     prod_images_tag: str = "main"
     enable_ai: bool = True
     is_resetup: bool = False
+    create_playwright_platforms: bool = False
     aws_access_key_id: str
     aws_secret_access_key: str
     aws_default_region: str

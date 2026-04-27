@@ -1,0 +1,117 @@
+---
+# Optional Playwright test fixture setup. Runs only when the operator opted
+# in via `create_playwright_platforms=true` (CLI prompt during setup, or
+# `--create-playwright-platforms` flag during launch).
+#
+# Three phases:
+#   1. LMS — create 4 browser superusers + 1 student user with stable
+#      first/last/UserProfile.name + a known test password
+#   2. sync — `ibl edx sync-with-manager --users` propagates them to DM
+#   3. DM   — run setup_playwright_platforms.py inside the DM container:
+#             8 platforms via run_launch_steps + 12 UserPlatformLinks
+#
+# Idempotent end-to-end: re-running this role on an already-bootstrapped
+# environment will skip platforms that exist and refresh UPL flags via
+# update_or_create. Generated platform-admin passwords (one per fresh
+# platform launch) print to the operator's terminal once and are never
+# persisted to disk by this role.
+
+- name: Compute env prefix from base_domain
+  ansible.builtin.set_fact:
+    pw_env_prefix: "{{ base_domain.split('.')[0] }}"
+
+- name: Create LMS browser superusers + student user for Playwright tests
+  become: false
+  shell: |
+    docker exec -i ibl_prod_lms ./manage.py lms shell <<'PY'
+    from django.contrib.auth.models import User
+    from common.djangoapps.student.models import UserProfile
+    BROWSER_USERS = [
+        {"username": "iblaiuserchromenew",  "email": "iblaiuserchromenew@ibleducation.com",  "first": "iblaiuser", "last": "chrome"},
+        {"username": "iblaiuseredgenew",    "email": "iblaiuseredgenew@ibleducation.com",    "first": "iblaiuser", "last": "edge"},
+        {"username": "iblaiuserfirefoxnew", "email": "iblaiuserfirefoxnew@ibleducation.com", "first": "iblaiuser", "last": "firefox"},
+        {"username": "iblaiusersafarinew",  "email": "iblaiusersafarinew@ibleducation.com",  "first": "iblaiuser", "last": "safari"},
+    ]
+    STUDENT = {
+        "username": "{{ pw_env_prefix }}user_ibleducation_com",
+        "email":    "{{ pw_env_prefix }}user@ibleducation.com",
+        "first":    "{{ pw_env_prefix | capitalize }}User",
+        "last":     "Ibleducation Com",
+    }
+    PASSWORD = "ibledu_2024"
+    def ensure_user(cfg, *, is_super, is_staff):
+        u, created = User.objects.get_or_create(
+            username=cfg["username"],
+            defaults={"email": cfg["email"], "is_active": True,
+                      "is_staff": is_staff, "is_superuser": is_super,
+                      "first_name": cfg["first"], "last_name": cfg["last"]},
+        )
+        u.set_password(PASSWORD)
+        if u.email != cfg["email"]: u.email = cfg["email"]
+        if u.is_active != True: u.is_active = True
+        if u.is_staff != is_staff: u.is_staff = is_staff
+        if u.is_superuser != is_super: u.is_superuser = is_super
+        if not u.first_name: u.first_name = cfg["first"]
+        if not u.last_name: u.last_name = cfg["last"]
+        u.save()
+        profile, _ = UserProfile.objects.get_or_create(
+            user=u,
+            defaults={"name": (cfg["first"] + " " + cfg["last"]).strip() or u.username},
+        )
+        if not profile.name or not profile.name.strip():
+            profile.name = (cfg["first"] + " " + cfg["last"]).strip() or u.username
+            profile.save()
+        print(f"PW_USER {'CREATED' if created else 'UPDATED'} {cfg['username']} super={is_super} staff={is_staff}")
+    for cfg in BROWSER_USERS:
+        ensure_user(cfg, is_super=True, is_staff=True)
+    ensure_user(STUDENT, is_super=False, is_staff=False)
+    print("PW_LMS_DONE")
+    PY
+  args:
+    executable: /bin/bash
+  register: pw_lms_result
+  changed_when: "'CREATED' in (pw_lms_result.stdout | default(''))"
+
+- name: Sync Playwright test users from edX to DM
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    ibl edx sync-with-manager --users
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+  timeout: 600
+
+- name: Copy Playwright platform setup script into DM container
+  become: false
+  shell: |
+    docker cp "{{ role_path }}/files/setup_playwright_platforms.py" \
+      ibl_dm_pro_web:/code/dl_manager/utilities/setup_playwright_platforms.py
+  args:
+    executable: /bin/bash
+  changed_when: true
+
+- name: Run Playwright platform setup script in DM container
+  # The script's stdout includes one-time platform-admin passwords. We register
+  # the result here (so it's available to the next debug task) but mark this
+  # step changed when ANY platform was created. The follow-up debug task is
+  # what actually surfaces the passwords to the operator.
+  become: false
+  shell: |
+    docker exec -w /code/dl_manager ibl_dm_pro_web \
+      python utilities/setup_playwright_platforms.py --env-prefix "{{ pw_env_prefix }}"
+  args:
+    executable: /bin/bash
+  register: pw_dm_result
+  changed_when: "'\"platforms_created\": []' not in (pw_dm_result.stdout | default(''))"
+  no_log: true  # keep generated platform-admin passwords out of -vvv logs
+
+- name: Show Playwright platform setup result (one-time, capture this)
+  ansible.builtin.debug:
+    msg: "{{ pw_dm_result.stdout_lines | default([]) }}"

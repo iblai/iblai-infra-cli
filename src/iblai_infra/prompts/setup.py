@@ -127,12 +127,26 @@ def _prompt_platform_config(
     else:
         ui.success("AI features: [highlight]Disabled[/highlight]")
 
+    create_playwright_platforms = questionary.confirm(
+        "Create Playwright test platforms? (8 spa-tests-* tenants + 4 browser superusers + 1 student)",
+        default=False,
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if create_playwright_platforms is None:
+        ui.abort()
+    if create_playwright_platforms:
+        ui.success("Playwright test platforms: [highlight]Yes[/highlight]")
+    else:
+        ui.success("Playwright test platforms: [highlight]Skip[/highlight]")
+
     return {
         "base_domain": base_domain,
         "edx_version": edx_version,
         "env_config": env_config,
         "cli_ops_release_tag": cli_ops_release_tag,
         "enable_ai": enable_ai,
+        "create_playwright_platforms": create_playwright_platforms,
     }
 
 

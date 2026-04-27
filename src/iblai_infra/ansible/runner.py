@@ -439,6 +439,7 @@ class AnsibleRunner:
             "prod_images_tag": self.config.prod_images_tag,
             "is_resetup": self.config.is_resetup,
             "enable_ai": self.config.enable_ai,
+            "create_playwright_platforms": self.config.create_playwright_platforms,
             "openai_api_key": self.config.openai_api_key,
             "admin_username": self.config.admin_username,
             "admin_email": self.config.admin_email,

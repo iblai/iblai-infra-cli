@@ -190,8 +190,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
-            # First confirm: enable AI, second confirm: reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, True]
+            # confirms: enable_ai, create_playwright_platforms, reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, True]
             mock_text.return_value.ask.side_effect = ["3.19.0", "ibl_admin", "admin@example.com"]
 
             config = prompt_setup(state)
@@ -221,8 +221,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "NEW_SECRET", "sk-test-key", "Admin1234"]
-            # First confirm: enable AI, second confirm: don't reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, False]
+            # confirms: enable_ai, create_playwright_platforms, don't reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, False]
             mock_text.return_value.ask.side_effect = ["3.19.0", "NEW_ACCESS_KEY", "ibl_admin", "admin@example.com"]
 
             config = prompt_setup(state)
@@ -276,8 +276,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
-            # First confirm: enable AI, second confirm: reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, True]
+            # confirms: enable_ai, create_playwright_platforms, reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, True]
             mock_path.return_value.ask.return_value = str(new_key)
             mock_text.return_value.ask.side_effect = ["3.19.0", "ibl_admin", "admin@example.com"]
 
@@ -302,8 +302,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
-            # First confirm: enable AI, second confirm: reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, True]
+            # confirms: enable_ai, create_playwright_platforms, reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, True]
             mock_path.return_value.ask.return_value = str(key)
             mock_text.return_value.ask.side_effect = ["3.19.0", "ibl_admin", "admin@example.com"]
 
@@ -328,8 +328,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
-            # First confirm: enable AI, second confirm: reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, True]
+            # confirms: enable_ai, create_playwright_platforms, reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, True]
             mock_path.return_value.ask.return_value = str(key)
             mock_text.return_value.ask.side_effect = ["3.19.0", "ibl_admin", "admin@example.com"]
 

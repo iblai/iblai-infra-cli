@@ -516,6 +516,11 @@ def launch(
     admin_username: str = typer.Option("ibl_admin", "--admin-username", help="Admin username"),
     openai_key: str = typer.Option("", "--openai-key", help="OpenAI API key (optional)"),
     enable_ai: bool = typer.Option(True, "--enable-ai/--no-ai", help="Enable AI features"),
+    create_playwright_platforms: bool = typer.Option(
+        False,
+        "--create-playwright-platforms/--no-create-playwright-platforms",
+        help="Create 8 spa-tests-* platforms + 4 browser superusers + 1 student user for Playwright tests",
+    ),
     deployment_type: str = typer.Option("single-server", "--deployment-type", help="single-server, multi-server, or call-server"),
     app_server_count: int = typer.Option(2, "--app-server-count", help="Number of app servers (multi-server only)"),
     services_instance_type: str = typer.Option("t3.2xlarge", "--services-instance-type", help="Services server instance type (multi-server only)"),
@@ -565,6 +570,7 @@ def launch(
         environment=environment, cli_tag=cli_tag,
         admin_username=admin_username, openai_key=openai_key,
         enable_ai=enable_ai,
+        create_playwright_platforms=create_playwright_platforms,
         deployment_type=deployment_type,
         app_server_count=app_server_count,
         services_instance_type=services_instance_type,
@@ -668,6 +674,7 @@ def launch_env(
     admin_username = env.get("ADMIN_USERNAME", "ibl_admin")
     openai_key = env.get("OPENAI_API_KEY", "")
     enable_ai = env.get("ENABLE_AI", "true").lower() in ("true", "1", "yes")
+    create_playwright_platforms = env.get("CREATE_PLAYWRIGHT_PLATFORMS", "false").lower() in ("true", "1", "yes")
 
     # Show summary
     project_name = name or domain.replace(".", "-")
@@ -710,6 +717,7 @@ def launch_env(
         environment=environment, cli_tag=cli_tag,
         admin_username=admin_username, openai_key=openai_key,
         enable_ai=enable_ai,
+        create_playwright_platforms=create_playwright_platforms,
     )
 
 
@@ -736,6 +744,7 @@ def _run_launch(
     admin_username: str,
     openai_key: str,
     enable_ai: bool,
+    create_playwright_platforms: bool = False,
     deployment_type: str = "single-server",
     app_server_count: int = 2,
     services_instance_type: str = "t3.2xlarge",
@@ -913,6 +922,7 @@ def _run_launch(
         env_config=("call-only" if deploy_type == DeploymentType.CALL else "single-server"),
         cli_ops_release_tag=cli_tag,
         enable_ai=enable_ai,
+        create_playwright_platforms=create_playwright_platforms,
         aws_access_key_id=aws_key_id,
         aws_secret_access_key=aws_secret_key,
         aws_default_region=aws_region,
