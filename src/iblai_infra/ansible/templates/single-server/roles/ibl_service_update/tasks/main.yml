@@ -442,6 +442,38 @@
   timeout: 600
   ignore_errors: true
 
+# Enforce spa-sso client_type=public + authorization_grant_type=authorization-code
+# on existing servers. Older provisioning runs created spa-sso as
+# `confidential` + `password`, which doesn't match the Auth SPA's actual
+# browser-driven authorization-code flow. Idempotent — only writes when the
+# row is wrong, so re-running service-update is a no-op once corrected.
+- name: Enforce spa-sso client_type=public + authorization_grant_type=authorization-code
+  become: false
+  shell: |
+    docker exec ibl_prod_lms ./manage.py lms shell -c "
+    from oauth2_provider.models import Application
+    try:
+        app = Application.objects.get(name='spa-sso')
+    except Application.DoesNotExist:
+        print('SPA_SSO_RESULT:MISSING')
+    else:
+        changed = []
+        if app.client_type != 'public':
+            app.client_type = 'public'; changed.append('client_type=public')
+        if app.authorization_grant_type != 'authorization-code':
+            app.authorization_grant_type = 'authorization-code'; changed.append('grant=authorization-code')
+        if changed:
+            app.save()
+            print('SPA_SSO_RESULT:UPDATED ' + ','.join(changed))
+        else:
+            print('SPA_SSO_RESULT:ALREADY_CORRECT')
+    "
+  args:
+    executable: /bin/bash
+  register: spa_sso_enforce
+  changed_when: "'UPDATED' in (spa_sso_enforce.stdout | default(''))"
+  ignore_errors: true
+
 - name: Sync SPA SSO credentials from LMS to Auth SPA config
   become: false
   shell: |
@@ -568,66 +600,44 @@
   set_fact:
     smoke_base_domain: "{{ base_domain_result.stdout | trim }}"
 
-- name: "Smoke test - get SSO credentials from LMS"
-  become: false
-  shell: >-
-    docker exec ibl_prod_lms ./manage.py lms shell -c
-    "from oauth2_provider.models import Application;
-    app = Application.objects.get(name='spa-sso');
-    print('SSO_RESULT=' + app.client_id + '|' + app.client_secret)"
-    2>/dev/null | grep '^SSO_RESULT=' | sed 's/^SSO_RESULT=//'
-  args:
-    executable: /bin/bash
-  register: sso_creds_result
-  ignore_errors: true
-
-- name: "Smoke test - set SSO credential facts"
-  set_fact:
-    smoke_sso_client_id: "{{ sso_creds_result.stdout.split('|')[0] | default('') }}"
-    smoke_sso_client_secret: "{{ sso_creds_result.stdout.split('|')[1] | default('') }}"
-  when: sso_creds_result.rc == 0 and '|' in sso_creds_result.stdout
-
-- name: "Smoke test - verify SSO token for browser test users"
+# spa-sso is configured as client_type=public + authorization-code grant,
+# so the password grant is not allowed against /oauth2/access_token/. We verify
+# test users via Django's authenticate() instead — that's what the smoke test
+# actually cares about ("do the test users exist with the right password set"),
+# without depending on a grant type the production app no longer accepts.
+- name: "Smoke test - verify Django credentials for browser test users"
   become: false
   shell: |
-    FAILED=0
-    CLIENT_ID="{{ smoke_sso_client_id | default('') }}"
-    CLIENT_SECRET="{{ smoke_sso_client_secret | default('') }}"
-    if [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ]; then
-      echo "SKIP - SSO credentials not available"
-      exit 0
-    fi
-    echo "=== SSO Login Smoke Test ==="
-    for USER in iblaiuserchromenew@ibleducation.com iblaiuserfirefoxnew@ibleducation.com iblaiusersafarinew@ibleducation.com iblaiuseredgenew@ibleducation.com; do
-      BODY=$(curl -sk -X POST "http://localhost:8600/oauth2/access_token/" \
-        -d "grant_type=password" \
-        -d "client_id=$CLIENT_ID" \
-        -d "client_secret=$CLIENT_SECRET" \
-        -d "username=$USER" \
-        -d "password=ibledu_2024" 2>/dev/null)
-      if echo "$BODY" | grep -q '"access_token"'; then
-        echo "PASS - $USER"
-      else
-        echo "FAIL - $USER"
-        echo "  $(echo "$BODY" | head -c 200)"
-        FAILED=$((FAILED + 1))
-      fi
-    done
-    echo ""
-    if [ $FAILED -gt 0 ]; then
-      echo "SMOKE_LOGIN - $FAILED/4 users FAILED"
-      exit 1
-    else
-      echo "SMOKE_LOGIN - All 4 users authenticated successfully"
-    fi
+    docker exec ibl_prod_lms ./manage.py lms shell -c "
+    from django.contrib.auth import authenticate
+    users = [
+        'iblaiuserchromenew',
+        'iblaiuserfirefoxnew',
+        'iblaiusersafarinew',
+        'iblaiuseredgenew',
+    ]
+    failed = 0
+    print('=== Browser Test User Auth Smoke Test ===')
+    for username in users:
+        u = authenticate(username=username, password='ibledu_2024')
+        if u is not None and u.is_active:
+            print('PASS - ' + username)
+        else:
+            print('FAIL - ' + username)
+            failed += 1
+    if failed:
+        print('SMOKE_LOGIN - ' + str(failed) + '/' + str(len(users)) + ' users FAILED')
+        raise SystemExit(1)
+    print('SMOKE_LOGIN - All ' + str(len(users)) + ' users authenticated successfully')
+    "
   args:
     executable: /bin/bash
   register: smoke_login
 
-- name: "Smoke test - fail if SSO login broken"
+- name: "Smoke test - fail if test user auth broken"
   ansible.builtin.fail:
-    msg: "SSO login failed. Fix test users before running Playwright tests. Output: {{ smoke_login.stdout_lines | default([]) | select('match', '^FAIL') | list | join(', ') }}"
-  when: smoke_login.rc != 0 and (smoke_login.stdout | default('')) is not search('SKIP')
+    msg: "Test user authentication failed. Fix test users before running Playwright tests. Output: {{ smoke_login.stdout_lines | default([]) | select('match', '^FAIL') | list | join(', ') }}"
+  when: smoke_login.rc != 0
 
 - name: "Smoke test - verify DM API responds"
   become: false

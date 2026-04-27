@@ -30,11 +30,41 @@
   retries: 60
   delay: 15
 
+# spa-sso must be `client_type=public` + `authorization_grant_type=authorization-code`
+# to match the Auth SPA's actual login flow (browser-driven authorization-code
+# redirect against learn.<domain>/oauth2/authorize). The earlier `confidential` +
+# `password` defaults predate the SPA's real auth flow and would only authenticate
+# via curl-style password grants — never through the SPA itself. `get_or_create`
+# defaults are NOT applied to existing rows, so we explicitly enforce the
+# desired client_type / grant_type on every run (idempotent).
 - name: Create OAuth2 Application in edX for SPA SSO
   become: false
   shell: |
-    docker exec ibl_prod_lms ./manage.py lms shell -c \
-      'from oauth2_provider.models import Application; from django.contrib.auth.models import User; usr=User.objects.get(username="ibl_admin"); app, created = Application.objects.get_or_create(name="spa-sso", user=usr, defaults={"client_id": "{{ spa_sso_client_id }}", "client_secret": "{{ spa_sso_client_secret }}", "client_type": "confidential", "authorization_grant_type": "password", "redirect_uris": "https://web.{{ base_domain }}", "skip_authorization": True}); print(app.client_id)'
+    docker exec ibl_prod_lms ./manage.py lms shell -c "
+    from oauth2_provider.models import Application
+    from django.contrib.auth.models import User
+    usr = User.objects.get(username='ibl_admin')
+    app, created = Application.objects.get_or_create(
+        name='spa-sso',
+        user=usr,
+        defaults={
+            'client_id': '{{ spa_sso_client_id }}',
+            'client_secret': '{{ spa_sso_client_secret }}',
+            'client_type': 'public',
+            'authorization_grant_type': 'authorization-code',
+            'redirect_uris': 'https://web.{{ base_domain }}',
+            'skip_authorization': True,
+        },
+    )
+    changed = False
+    if app.client_type != 'public':
+        app.client_type = 'public'; changed = True
+    if app.authorization_grant_type != 'authorization-code':
+        app.authorization_grant_type = 'authorization-code'; changed = True
+    if changed:
+        app.save()
+    print(app.client_id)
+    "
   args:
     executable: /bin/bash
   register: oauth_app_result
