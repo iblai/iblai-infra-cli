@@ -443,15 +443,22 @@
   ignore_errors: true
 
 # Enforce spa-sso client_type=public + authorization_grant_type=authorization-code
-# on existing servers. Older provisioning runs created spa-sso as
-# `confidential` + `password`, which doesn't match the Auth SPA's actual
-# browser-driven authorization-code flow. Idempotent — only writes when the
-# row is wrong, so re-running service-update is a no-op once corrected.
-- name: Enforce spa-sso client_type=public + authorization_grant_type=authorization-code
+# + redirect_uris on existing servers. Older provisioning runs created spa-sso
+# as `confidential` + `password` with redirect_uris=https://web.<domain>, which
+# doesn't match the Auth SPA's actual browser-driven authorization-code flow
+# back into auth.<domain>/login/complete. Idempotent — only writes when a
+# field is wrong, so re-running service-update is a no-op once corrected.
+- name: Enforce spa-sso client_type=public + authorization_grant_type=authorization-code + redirect_uris
   become: false
   shell: |
     docker exec ibl_prod_lms ./manage.py lms shell -c "
     from oauth2_provider.models import Application
+    REDIRECT_URIS = ' '.join([
+        'https://auth.{{ base_domain }}/login/complete',
+        'https://auth.ibl.ai/login/complete',
+        'https://auth.{{ base_domain }}/login/mobile/complete',
+        'https://auth.ibl.ai/login/mobile/complete',
+    ])
     try:
         app = Application.objects.get(name='spa-sso')
     except Application.DoesNotExist:
@@ -462,6 +469,10 @@
             app.client_type = 'public'; changed.append('client_type=public')
         if app.authorization_grant_type != 'authorization-code':
             app.authorization_grant_type = 'authorization-code'; changed.append('grant=authorization-code')
+        existing_uris = set((app.redirect_uris or '').split())
+        expected_uris = set(REDIRECT_URIS.split())
+        if existing_uris != expected_uris:
+            app.redirect_uris = REDIRECT_URIS; changed.append('redirect_uris')
         if changed:
             app.save()
             print('SPA_SSO_RESULT:UPDATED ' + ','.join(changed))

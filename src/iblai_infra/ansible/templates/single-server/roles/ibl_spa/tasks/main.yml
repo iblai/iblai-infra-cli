@@ -36,13 +36,24 @@
 # `password` defaults predate the SPA's real auth flow and would only authenticate
 # via curl-style password grants — never through the SPA itself. `get_or_create`
 # defaults are NOT applied to existing rows, so we explicitly enforce the
-# desired client_type / grant_type on every run (idempotent).
+# desired client_type / grant_type / redirect_uris on every run (idempotent).
+#
+# redirect_uris must include the env's own auth SPA AND auth.ibl.ai so the
+# canonical production Auth SPA can also redirect back into this env. Each
+# host gets both /login/complete (web) and /login/mobile/complete (mobile)
+# callbacks. oauth2_provider stores this as a space-separated string.
 - name: Create OAuth2 Application in edX for SPA SSO
   become: false
   shell: |
     docker exec ibl_prod_lms ./manage.py lms shell -c "
     from oauth2_provider.models import Application
     from django.contrib.auth.models import User
+    REDIRECT_URIS = ' '.join([
+        'https://auth.{{ base_domain }}/login/complete',
+        'https://auth.ibl.ai/login/complete',
+        'https://auth.{{ base_domain }}/login/mobile/complete',
+        'https://auth.ibl.ai/login/mobile/complete',
+    ])
     usr = User.objects.get(username='ibl_admin')
     app, created = Application.objects.get_or_create(
         name='spa-sso',
@@ -52,7 +63,7 @@
             'client_secret': '{{ spa_sso_client_secret }}',
             'client_type': 'public',
             'authorization_grant_type': 'authorization-code',
-            'redirect_uris': 'https://web.{{ base_domain }}',
+            'redirect_uris': REDIRECT_URIS,
             'skip_authorization': True,
         },
     )
@@ -61,6 +72,10 @@
         app.client_type = 'public'; changed = True
     if app.authorization_grant_type != 'authorization-code':
         app.authorization_grant_type = 'authorization-code'; changed = True
+    existing_uris = set((app.redirect_uris or '').split())
+    expected_uris = set(REDIRECT_URIS.split())
+    if existing_uris != expected_uris:
+        app.redirect_uris = REDIRECT_URIS; changed = True
     if changed:
         app.save()
     print(app.client_id)
