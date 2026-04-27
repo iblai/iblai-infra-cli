@@ -5,20 +5,28 @@
 #
 # Three phases:
 #   1. LMS — create 4 browser superusers + 1 student user with stable
-#      first/last/UserProfile.name + a known test password
+#      first/last/UserProfile.name + a freshly-generated random password
 #   2. sync — `ibl edx sync-with-manager --users` propagates them to DM
 #   3. DM   — run setup_playwright_platforms.py inside the DM container:
 #             8 platforms via run_launch_steps + 12 UserPlatformLinks
 #
 # Idempotent end-to-end: re-running this role on an already-bootstrapped
 # environment will skip platforms that exist and refresh UPL flags via
-# update_or_create. Generated platform-admin passwords (one per fresh
-# platform launch) print to the operator's terminal once and are never
-# persisted to disk by this role.
+# update_or_create. The browser/student password is regenerated on every
+# run and surfaced to the operator's terminal once via a debug task.
+# Generated platform-admin passwords (one per fresh platform launch)
+# print the same way. Nothing is persisted to disk by this role.
 
 - name: Compute env prefix from base_domain
   ansible.builtin.set_fact:
     pw_env_prefix: "{{ base_domain.split('.')[0] }}"
+
+# Random 16-char password, regenerated per run. Lives only in this fact +
+# the operator's terminal output — never written to a file by the role.
+- name: Generate Playwright test-user password (regenerated per run)
+  ansible.builtin.set_fact:
+    pw_test_password: "{{ lookup('password', '/dev/null length=16 chars=ascii_letters,digits') }}"
+  no_log: true
 
 - name: Create LMS browser superusers + student user for Playwright tests
   become: false
@@ -38,7 +46,7 @@
         "first":    "{{ pw_env_prefix | capitalize }}User",
         "last":     "Ibleducation Com",
     }
-    PASSWORD = "ibledu_2024"
+    PASSWORD = "{{ pw_test_password }}"
     def ensure_user(cfg, *, is_super, is_staff):
         u, created = User.objects.get_or_create(
             username=cfg["username"],
@@ -70,7 +78,8 @@
   args:
     executable: /bin/bash
   register: pw_lms_result
-  changed_when: "'CREATED' in (pw_lms_result.stdout | default(''))"
+  changed_when: "'PW_USER' in (pw_lms_result.stdout | default(''))"
+  no_log: true  # the rendered shell body contains the freshly-set password
 
 # Match the `Sync edX with DM` pattern in final_steps — ignore errors so a
 # flaky sync run doesn't abort the whole role. The downstream script reports
@@ -119,4 +128,14 @@
 
 - name: Show Playwright platform setup result (one-time, capture this)
   ansible.builtin.debug:
-    msg: "{{ pw_dm_result.stdout_lines | default([]) }}"
+    msg: |
+      ================================================================
+      PLAYWRIGHT TEST FIXTURE — SAVE THIS OUTPUT
+      Browser/student password is regenerated on every role run.
+      ================================================================
+      Browser superuser + student user password:
+        {{ pw_test_password }}
+      ----------------------------------------------------------------
+      Platform setup result (admin passwords for each fresh launch):
+      {{ pw_dm_result.stdout_lines | default([]) | join('\n') }}
+      ================================================================
