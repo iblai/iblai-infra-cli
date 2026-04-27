@@ -190,8 +190,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
-            # confirms: enable_ai, create_playwright_platforms, reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, False, True]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, False, True]
             mock_text.return_value.ask.side_effect = ["3.19.0", "ibl_admin", "admin@example.com"]
 
             config = prompt_setup(state)
@@ -200,6 +200,7 @@ class TestPromptSetup:
         assert config.env_config == "single-server"
         assert config.cli_ops_release_tag == "3.19.0"
         assert config.enable_ai is True
+        assert config.smtp_enabled is False
         assert config.aws_access_key_id == "AKIA"
         assert config.aws_secret_access_key == "SECRET"
         assert config.git_access_token == "ghp_testtoken"
@@ -221,8 +222,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "NEW_SECRET", "sk-test-key", "Admin1234"]
-            # confirms: enable_ai, create_playwright_platforms, don't reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, False, False]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, don't reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, False, False]
             mock_text.return_value.ask.side_effect = ["3.19.0", "NEW_ACCESS_KEY", "ibl_admin", "admin@example.com"]
 
             config = prompt_setup(state)
@@ -247,8 +248,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "SECRET", "", "Admin1234"]
-            # Only one confirm: enable AI (no reuse prompt when no access keys)
-            mock_confirm.return_value.ask.return_value = True
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled (no reuse prompt when no access keys)
+            mock_confirm.return_value.ask.side_effect = [True, True, False]
             mock_text.return_value.ask.side_effect = ["3.19.0", "ACCESS_KEY", "ibl_admin", "admin@example.com"]
 
             config = prompt_setup(state)
@@ -276,8 +277,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
-            # confirms: enable_ai, create_playwright_platforms, reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, False, True]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, False, True]
             mock_path.return_value.ask.return_value = str(new_key)
             mock_text.return_value.ask.side_effect = ["3.19.0", "ibl_admin", "admin@example.com"]
 
@@ -302,8 +303,8 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
-            # confirms: enable_ai, create_playwright_platforms, reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, False, True]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, False, True]
             mock_path.return_value.ask.return_value = str(key)
             mock_text.return_value.ask.side_effect = ["3.19.0", "ibl_admin", "admin@example.com"]
 
@@ -328,14 +329,62 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
-            # confirms: enable_ai, create_playwright_platforms, reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, False, True]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, False, True]
             mock_path.return_value.ask.return_value = str(key)
             mock_text.return_value.ask.side_effect = ["3.19.0", "ibl_admin", "admin@example.com"]
 
             config = prompt_setup(state)
 
         assert config.ssh_private_key_path == key
+
+    def test_full_flow_smtp_enabled(self, tmp_path):
+        """When operator answers yes to SMTP, all 7 fields are collected."""
+        from iblai_infra.prompts.setup import prompt_setup
+
+        state = self._make_state(tmp_path)
+
+        with (
+            patch("questionary.password") as mock_password,
+            patch("questionary.confirm") as mock_confirm,
+            patch("questionary.text") as mock_text,
+        ):
+            # passwords (questionary.password): smtp_password (step 2), GitHub token (step 3), OpenAI (skip), admin password
+            mock_password.return_value.ask.side_effect = [
+                "smtp-secret-pw",
+                "ghp_testtoken",
+                "",
+                "Admin1234",
+            ]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled,
+            #          smtp_use_tls, smtp_use_ssl, reuse_credentials
+            mock_confirm.return_value.ask.side_effect = [
+                True, False, True, True, False, True,
+            ]
+            # texts: cli_ops_tag, smtp_host, smtp_port, smtp_username,
+            #        smtp_sender_email, admin_username, admin_email
+            mock_text.return_value.ask.side_effect = [
+                "3.19.0",
+                "email-smtp.us-east-1.amazonaws.com",
+                "587",
+                "AKIATESTUSER",
+                "noreply@example.com",
+                "ibl_admin",
+                "admin@example.com",
+            ]
+
+            config = prompt_setup(state)
+
+        assert config.smtp_enabled is True
+        assert config.smtp_host == "email-smtp.us-east-1.amazonaws.com"
+        assert config.smtp_port == 587
+        assert config.smtp_username == "AKIATESTUSER"
+        assert config.smtp_password == "smtp-secret-pw"
+        assert config.smtp_sender_email == "noreply@example.com"
+        assert config.smtp_use_tls is True
+        assert config.smtp_use_ssl is False
+        # password is excluded from JSON serialization
+        assert '"smtp_password"' not in config.model_dump_json()
 
 
 # ---------------------------------------------------------------------------
