@@ -47,3 +47,12 @@
     - integrations
     - admin_setup
     - data_seeding
+
+  tasks:
+    # Optional Playwright test fixture setup. Runs only when the operator
+    # opted in via the `Create Playwright test platforms?` prompt at setup
+    # time (or `--create-playwright-platforms` for `iblai infra launch`).
+    - name: Set up Playwright test platforms
+      ansible.builtin.include_role:
+        name: playwright_test_platforms
+      when: create_playwright_platforms | default(false) | bool
