@@ -513,6 +513,9 @@ def launch(
     volume_size: int = typer.Option(200, "--volume-size", help="Root volume size in GB"),
     environment: str = typer.Option("staging", "--environment", help="Environment (dev, staging, prod)"),
     cli_tag: str = typer.Option("3.19.0", "--cli-tag", help="iblai-cli-ops release tag"),
+    github_org: str = typer.Option("iblai", "--github-org", help="GitHub org owning the private CLI ops + prod images repos"),
+    cli_ops_repo: str = typer.Option("iblai-cli-ops", "--cli-ops-repo", help="Name of the private CLI ops repo (under --github-org)"),
+    prod_images_repo: str = typer.Option("iblai-prod-images", "--prod-images-repo", help="Name of the private prod images repo (under --github-org)"),
     admin_username: str = typer.Option("ibl_admin", "--admin-username", help="Admin username"),
     openai_key: str = typer.Option("", "--openai-key", help="OpenAI API key (optional)"),
     enable_ai: bool = typer.Option(True, "--enable-ai/--no-ai", help="Enable AI features"),
@@ -586,6 +589,9 @@ def launch(
         environment=environment, cli_tag=cli_tag,
         admin_username=admin_username, openai_key=openai_key,
         enable_ai=enable_ai,
+        github_org=github_org,
+        cli_ops_repo=cli_ops_repo,
+        prod_images_repo=prod_images_repo,
         create_playwright_platforms=create_playwright_platforms,
         smtp_host=smtp_host,
         smtp_port=smtp_port,
@@ -705,6 +711,9 @@ def launch_env(
     openai_key = env.get("OPENAI_API_KEY", "")
     enable_ai = env.get("ENABLE_AI", "true").lower() in ("true", "1", "yes")
     create_playwright_platforms = env.get("CREATE_PLAYWRIGHT_PLATFORMS", "false").lower() in ("true", "1", "yes")
+    github_org = env.get("GITHUB_ORG", "iblai")
+    cli_ops_repo = env.get("CLI_OPS_REPO", "iblai-cli-ops")
+    prod_images_repo = env.get("PROD_IMAGES_REPO", "iblai-prod-images")
     smtp_host = env.get("SMTP_HOST", "")
     smtp_port = int(env.get("SMTP_PORT", "587"))
     smtp_username = env.get("SMTP_USERNAME", "")
@@ -761,6 +770,9 @@ def launch_env(
         environment=environment, cli_tag=cli_tag,
         admin_username=admin_username, openai_key=openai_key,
         enable_ai=enable_ai,
+        github_org=github_org,
+        cli_ops_repo=cli_ops_repo,
+        prod_images_repo=prod_images_repo,
         create_playwright_platforms=create_playwright_platforms,
         smtp_host=smtp_host,
         smtp_port=smtp_port,
@@ -802,6 +814,9 @@ def _run_launch(
     admin_username: str,
     openai_key: str,
     enable_ai: bool,
+    github_org: str = "iblai",
+    cli_ops_repo: str = "iblai-cli-ops",
+    prod_images_repo: str = "iblai-prod-images",
     create_playwright_platforms: bool = False,
     smtp_host: str = "",
     smtp_port: int = 587,
@@ -992,7 +1007,11 @@ def _run_launch(
     # has already provisioned the box; if the operator realizes here
     # they don't have access, they can ctrl-C and `iblai infra destroy`
     # before phase 2 burns hours on a doomed pip / docker pull.
-    ui.private_access_notice()
+    ui.private_access_notice(
+        github_org=github_org,
+        cli_ops_repo=cli_ops_repo,
+        prod_images_repo=prod_images_repo,
+    )
     ui.muted(
         "Non-interactive launch — proceeding. If phase 2 fails on `pip "
         "install` or `docker pull` auth errors, request access at "
@@ -1029,6 +1048,9 @@ def _run_launch(
         aws_secret_access_key=aws_secret_key,
         aws_default_region=aws_region,
         git_access_token=git_token,
+        github_org=github_org,
+        cli_ops_repo=cli_ops_repo,
+        prod_images_repo=prod_images_repo,
         openai_api_key=openai_key,
         admin_username=admin_username,
         admin_email=admin_email,
@@ -1776,7 +1798,11 @@ def _confirm_and_run(state, setup_config, rerun_hint: str) -> None:
     # commits to a 30-90 minute setup that pulls from private GitHub repos
     # and ECR. The non-interactive flows print the same notice without
     # this confirmation prompt — see `_run_launch`.
-    ui.private_access_notice()
+    ui.private_access_notice(
+        github_org=setup_config.github_org,
+        cli_ops_repo=setup_config.cli_ops_repo,
+        prod_images_repo=setup_config.prod_images_repo,
+    )
 
     have_access = questionary.confirm(
         "Do you have access to all three private resources above?",
