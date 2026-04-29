@@ -192,6 +192,57 @@ def abort(message: str = "Aborted.") -> None:
     raise SystemExit(1)
 
 
+# Notice shown before any ansible-driven setup or launch. The platform's
+# ansible roles install `iblai-cli-ops` from a private GitHub repo (via
+# `pip install` with a Personal Access Token), pull the `iblai-images`
+# Python package from another private GitHub repo, and `docker pull`
+# every container image from a private ECR registry. Without access to
+# all three, the run fails part-way through with auth errors that are
+# hard to map back to "you don't have permission yet" — usually buried
+# inside `pip install` or `docker login` output 5-30 minutes deep.
+#
+# Surfacing this requirement at the top of every setup / launch flow
+# lets a first-time operator (or a client trying the open-source repo)
+# confirm they're set up correctly OR bail before spending time and
+# AWS dollars on a doomed run.
+PRIVATE_ACCESS_NOTICE = """\
+This setup pulls private packages and container images from IBL.
+You'll need access to ALL three of the following:
+
+  1. github.com/iblai/iblai-cli-ops      (private repo — installed via pip with a GitHub token)
+  2. github.com/iblai/iblai-prod-images  (private repo — installed as a Python package)
+  3. AWS ECR account 765174860755 in us-east-1
+     (private container images: iblai-edx-pro, iblai-dm-pro, iblai-edx-mfe-pro,
+      iblai-mysql, iblai-mongo, iblai-redis, iblai-meilisearch, the SPA images,
+      and others)
+
+Without all three, the run will fail part-way through with auth errors —
+typically `pip install` for the GitHub repos or `docker pull` / `docker
+login` for the ECR images, after the box has already been provisioned.
+
+Don't have access yet? Request it at https://ibl.ai/contact/ before
+re-running. Mention you want access to:
+  - the iblai-cli-ops + iblai-prod-images GitHub repos
+  - the iblai ECR (account 765174860755)
+"""
+
+
+def private_access_notice() -> None:
+    """Print the IBL private-access prerequisites notice.
+
+    Always shown right before the ansible-driven phase of `iblai infra
+    setup` / `iblai infra launch` / `iblai infra launch-env` begins.
+    The interactive setup flow follows this with a `questionary.confirm`
+    so the operator can bail; non-interactive flows (launch, launch-env)
+    print the notice as a hard-to-miss heads-up so a CI run that fails
+    on pip/docker auth has an obvious explanation in its stdout.
+    """
+    section(
+        "Prerequisites — IBL platform access required",
+        PRIVATE_ACCESS_NOTICE,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Progress display builders
 # ---------------------------------------------------------------------------

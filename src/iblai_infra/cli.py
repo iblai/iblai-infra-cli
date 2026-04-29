@@ -986,6 +986,20 @@ def _run_launch(
     ui.info("Phase 2: Configuring platform...")
     ui.newline()
 
+    # Same private-resource notice the interactive setup flow prints +
+    # confirms — but this is `iblai infra launch` / `launch-env`, so we
+    # surface the requirement as a heads-up without prompting. Phase 1
+    # has already provisioned the box; if the operator realizes here
+    # they don't have access, they can ctrl-C and `iblai infra destroy`
+    # before phase 2 burns hours on a doomed pip / docker pull.
+    ui.private_access_notice()
+    ui.muted(
+        "Non-interactive launch — proceeding. If phase 2 fails on `pip "
+        "install` or `docker pull` auth errors, request access at "
+        "https://ibl.ai/contact/ and re-run."
+    )
+    ui.newline()
+
     setup_config = SetupConfig(
         ssh_private_key_path=ssh_key,
         ssh_user=ssh_user,
@@ -1757,6 +1771,24 @@ def _confirm_and_run(state, setup_config, rerun_hint: str) -> None:
     ui.summary_panel("Setup Summary", rows)
 
     import questionary
+
+    # Make the IBL private-resource prerequisite obvious BEFORE the operator
+    # commits to a 30-90 minute setup that pulls from private GitHub repos
+    # and ECR. The non-interactive flows print the same notice without
+    # this confirmation prompt — see `_run_launch`.
+    ui.private_access_notice()
+
+    have_access = questionary.confirm(
+        "Do you have access to all three private resources above?",
+        default=True,
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if not have_access:
+        ui.abort(
+            "Cancelled. Request access at https://ibl.ai/contact/ "
+            "and re-run when ready."
+        )
 
     confirm = questionary.confirm(
         "Proceed with setup?",
