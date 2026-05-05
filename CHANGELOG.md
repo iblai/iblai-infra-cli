@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.4] — 2026-05-05
+
+### Changed
+- **Pin direct runtime dependencies to currently running freeze versions for issue #1633** — updated `pyproject.toml` to exact pins for `ansible-core==2.19.9`, `boto3==1.42.97`, `pydantic==2.13.3`, `questionary==2.1.1`, `rich==15.0.0`, and `typer==0.25.0`, then regenerated `uv.lock` so lock and install metadata are aligned to the same tested dependency set.
+
 ## [1.5.3] — 2026-05-01
 
 ### Fixed
