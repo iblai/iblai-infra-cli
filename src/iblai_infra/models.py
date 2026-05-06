@@ -381,6 +381,26 @@ class SetupConfig(BaseModel):
     google_sso_client_id: str = ""
     google_sso_client_secret: str = Field(default="", exclude=True)
     google_sso_organization: str = ""
+    # Platform name — single-token identifier used by the SSO ansible roles
+    # to derive `backend_name = <platform_name>-oauth2` and the
+    # `other_settings.platform_key`. Defaults to "main" (canonical IBL
+    # single-tenant). Operator may override during setup with a
+    # tenant-specific value. Lowercased + stripped on input. Always
+    # populated; the SSO roles read it whether or not their feature flag
+    # is enabled.
+    platform_name: str = "main"
+    # Microsoft (Azure AD) SSO — adds an `OAuth2ProviderConfig` row in the
+    # LMS for the `azuread-oauth2` slug (with backend_name derived from
+    # platform_name) AND an `IBL_EDX_BASE_OAUTH_SSO_BACKEND` block under
+    # `IBL_EDX` in `/ibl/config.yml`. Disabled by default; the ansible
+    # role no-ops unless microsoft_sso_enabled is true. Client secret is
+    # excluded from serialization so it never lands in state.json — it
+    # rides extra_vars to ansible at run time only.
+    microsoft_sso_enabled: bool = False
+    microsoft_sso_client_id: str = ""
+    microsoft_sso_client_secret: str = Field(default="", exclude=True)
+    microsoft_sso_tenant_id: str = ""
+    microsoft_sso_organization: str = ""
 
 
 # ---------------------------------------------------------------------------

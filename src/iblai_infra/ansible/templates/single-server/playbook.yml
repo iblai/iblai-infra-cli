@@ -50,6 +50,7 @@
     - data_seeding
     - stripe_config
     - google_sso_config
+    - microsoft_sso_config
 
   tasks:
     # Optional Playwright test fixture setup. Runs only when the operator

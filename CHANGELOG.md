@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.0] — 2026-05-06
+
+### Added
+- **Optional Microsoft (Azure AD) SSO setup** via a new `microsoft_sso_config` ansible role. When the operator opts in (Y/N prompt during `iblai infra setup`, or `--microsoft-sso-client-id` for `iblai infra launch`), the role does two things: (1) patches `IBL_EDX.IBL_EDX_BASE_OAUTH_SSO_BACKEND` in `/ibl/config.yml` via direct Python yaml manipulation (since the block has nested dicts + a list, which `ibl config save --set` cannot round-trip), runs `ibl config save`, and bounces edX so the new Django settings take effect; (2) creates an `OAuth2ProviderConfig` row on the LMS for the `azuread-oauth2` slug, with `backend_name` derived from `platform_name`, `sync_learner_profile_data=True`, and a Microsoft-specific `other_settings` JSON carrying `platform_key`, `backend_uri`, and the Azure AD federated `logout_url`. Idempotent — the heavy `ibl config save` + edX restart only run when the config block actually differs from the desired state, and the `OAuth2ProviderConfig` save uses `current(slug)` to skip when the latest revision already matches
+- **`SetupConfig.platform_name`** — top-level field (defaults to `main`), prompted at the start of Step 2 (Platform Configuration). Lowercased + stripped on input. Drives both the SSO `backend_name` (`<platform_name>-oauth2`) and the `other_settings.platform_key`. Always populated; the SSO roles read it whether or not their feature flag is enabled
+- **`SetupConfig.microsoft_sso_*` fields** — `microsoft_sso_enabled`, `microsoft_sso_client_id`, `microsoft_sso_client_secret`, `microsoft_sso_tenant_id`, `microsoft_sso_organization`. Client secret is `Field(exclude=True)` so it never lands in `state.json`
+- **Launch CLI flags** — `--platform-name` (default `main`), `--microsoft-sso-client-id` (the trigger), `--microsoft-sso-client-secret`, `--microsoft-sso-tenant-id`, `--microsoft-sso-organization`. Same env-var pattern as Stripe / SMTP / Google SSO
+
 ## [1.6.0] — 2026-05-06
 
 ### Added

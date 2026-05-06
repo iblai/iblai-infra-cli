@@ -41,6 +41,7 @@ ROLE_LABELS: dict[str, str] = {
     "data_seeding": "Data Seeding",
     "stripe_config": "Stripe Config",
     "google_sso_config": "Google SSO Config",
+    "microsoft_sso_config": "Microsoft SSO Config",
 }
 
 LAUNCH_ROLE_LABELS: dict[str, str] = {
@@ -53,6 +54,7 @@ LAUNCH_ROLE_LABELS: dict[str, str] = {
     "data_seeding": "Data Seeding",
     "stripe_config": "Stripe Config",
     "google_sso_config": "Google SSO Config",
+    "microsoft_sso_config": "Microsoft SSO Config",
 }
 
 SERVICE_UPDATE_ROLE_LABELS: dict[str, str] = {
@@ -496,6 +498,12 @@ class AnsibleRunner:
             "google_sso_client_id": self.config.google_sso_client_id,
             "google_sso_client_secret": self.config.google_sso_client_secret,
             "google_sso_organization": self.config.google_sso_organization,
+            "platform_name": self.config.platform_name,
+            "microsoft_sso_enabled": self.config.microsoft_sso_enabled,
+            "microsoft_sso_client_id": self.config.microsoft_sso_client_id,
+            "microsoft_sso_client_secret": self.config.microsoft_sso_client_secret,
+            "microsoft_sso_tenant_id": self.config.microsoft_sso_tenant_id,
+            "microsoft_sso_organization": self.config.microsoft_sso_organization,
             "openai_api_key": self.config.openai_api_key,
             "admin_username": self.config.admin_username,
             "admin_email": self.config.admin_email,

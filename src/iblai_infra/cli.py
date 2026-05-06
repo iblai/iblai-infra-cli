@@ -544,6 +544,13 @@ def launch(
     google_sso_client_id: str = typer.Option("", "--google-sso-client-id", help="Google OAuth Client ID. Setting this enables the Google SSO ansible role."),
     google_sso_client_secret: str = typer.Option("", "--google-sso-client-secret", help="Google OAuth Client Secret"),
     google_sso_organization: str = typer.Option("", "--google-sso-organization", help="Organization short name to attach to the OAuth2ProviderConfig (optional)"),
+    # Platform name — drives SSO backend_name + platform_key. Always populated; defaults to "main"
+    platform_name: str = typer.Option("main", "--platform-name", help="Platform identifier (lowercase). Used to derive SSO backend_name (<platform>-oauth2) and other_settings.platform_key. Default 'main'."),
+    # Microsoft SSO — `--microsoft-sso-client-id` is the trigger; if empty, the role no-ops
+    microsoft_sso_client_id: str = typer.Option("", "--microsoft-sso-client-id", help="Microsoft Azure AD Application (Client) ID. Setting this enables the Microsoft SSO ansible role."),
+    microsoft_sso_client_secret: str = typer.Option("", "--microsoft-sso-client-secret", help="Microsoft Azure AD Client Secret value"),
+    microsoft_sso_tenant_id: str = typer.Option("", "--microsoft-sso-tenant-id", help="Microsoft Azure AD Tenant ID (used to construct OIDC endpoint + logout URL)"),
+    microsoft_sso_organization: str = typer.Option("", "--microsoft-sso-organization", help="Organization short name to attach to the OAuth2ProviderConfig (optional)"),
     deployment_type: str = typer.Option("single-server", "--deployment-type", help="single-server, multi-server, or call-server"),
     app_server_count: int = typer.Option(2, "--app-server-count", help="Number of app servers (multi-server only)"),
     services_instance_type: str = typer.Option("t3.2xlarge", "--services-instance-type", help="Services server instance type (multi-server only)"),
@@ -614,6 +621,11 @@ def launch(
         google_sso_client_id=google_sso_client_id,
         google_sso_client_secret=google_sso_client_secret,
         google_sso_organization=google_sso_organization,
+        platform_name=platform_name,
+        microsoft_sso_client_id=microsoft_sso_client_id,
+        microsoft_sso_client_secret=microsoft_sso_client_secret,
+        microsoft_sso_tenant_id=microsoft_sso_tenant_id,
+        microsoft_sso_organization=microsoft_sso_organization,
         deployment_type=deployment_type,
         app_server_count=app_server_count,
         services_instance_type=services_instance_type,
@@ -738,6 +750,11 @@ def launch_env(
     google_sso_client_id = env.get("GOOGLE_SSO_CLIENT_ID", "")
     google_sso_client_secret = env.get("GOOGLE_SSO_CLIENT_SECRET", "")
     google_sso_organization = env.get("GOOGLE_SSO_ORGANIZATION", "")
+    platform_name = env.get("PLATFORM_NAME", "main")
+    microsoft_sso_client_id = env.get("MICROSOFT_SSO_CLIENT_ID", "")
+    microsoft_sso_client_secret = env.get("MICROSOFT_SSO_CLIENT_SECRET", "")
+    microsoft_sso_tenant_id = env.get("MICROSOFT_SSO_TENANT_ID", "")
+    microsoft_sso_organization = env.get("MICROSOFT_SSO_ORGANIZATION", "")
 
     # Show summary
     project_name = name or domain.replace(".", "-")
@@ -801,6 +818,11 @@ def launch_env(
         google_sso_client_id=google_sso_client_id,
         google_sso_client_secret=google_sso_client_secret,
         google_sso_organization=google_sso_organization,
+        platform_name=platform_name,
+        microsoft_sso_client_id=microsoft_sso_client_id,
+        microsoft_sso_client_secret=microsoft_sso_client_secret,
+        microsoft_sso_tenant_id=microsoft_sso_tenant_id,
+        microsoft_sso_organization=microsoft_sso_organization,
     )
 
 
@@ -848,6 +870,11 @@ def _run_launch(
     google_sso_client_id: str = "",
     google_sso_client_secret: str = "",
     google_sso_organization: str = "",
+    platform_name: str = "main",
+    microsoft_sso_client_id: str = "",
+    microsoft_sso_client_secret: str = "",
+    microsoft_sso_tenant_id: str = "",
+    microsoft_sso_organization: str = "",
     deployment_type: str = "single-server",
     app_server_count: int = 2,
     services_instance_type: str = "t3.2xlarge",
@@ -1055,6 +1082,12 @@ def _run_launch(
         google_sso_client_id=google_sso_client_id,
         google_sso_client_secret=google_sso_client_secret,
         google_sso_organization=google_sso_organization,
+        platform_name=(platform_name or "main").strip().lower(),
+        microsoft_sso_enabled=bool(microsoft_sso_client_id),
+        microsoft_sso_client_id=microsoft_sso_client_id,
+        microsoft_sso_client_secret=microsoft_sso_client_secret,
+        microsoft_sso_tenant_id=microsoft_sso_tenant_id,
+        microsoft_sso_organization=microsoft_sso_organization,
         aws_access_key_id=aws_key_id,
         aws_secret_access_key=aws_secret_key,
         aws_default_region=aws_region,
