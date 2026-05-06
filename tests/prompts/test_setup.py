@@ -190,9 +190,9 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
-            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, stripe_enabled, google_sso_enabled, reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, False, False, False, False, True]
-            mock_text.return_value.ask.side_effect = ["3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "ibl_admin", "admin@example.com"]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, stripe_enabled, google_sso_enabled, microsoft_sso_enabled, reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, False, False, False, False, True]
+            mock_text.return_value.ask.side_effect = ["main", "3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "ibl_admin", "admin@example.com"]
 
             config = prompt_setup(state)
 
@@ -222,9 +222,9 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "NEW_SECRET", "sk-test-key", "Admin1234"]
-            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, stripe_enabled, google_sso_enabled, don't reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, False, False, False, False, False]
-            mock_text.return_value.ask.side_effect = ["3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "NEW_ACCESS_KEY", "ibl_admin", "admin@example.com"]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, stripe_enabled, google_sso_enabled, microsoft_sso_enabled, don't reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, False, False, False, False, False]
+            mock_text.return_value.ask.side_effect = ["main", "3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "NEW_ACCESS_KEY", "ibl_admin", "admin@example.com"]
 
             config = prompt_setup(state)
 
@@ -248,9 +248,9 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "SECRET", "", "Admin1234"]
-            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, stripe_enabled, google_sso_enabled (no reuse prompt when no access keys)
-            mock_confirm.return_value.ask.side_effect = [True, True, False, False, False]
-            mock_text.return_value.ask.side_effect = ["3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "ACCESS_KEY", "ibl_admin", "admin@example.com"]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, stripe_enabled, google_sso_enabled, microsoft_sso_enabled (no reuse prompt when no access keys)
+            mock_confirm.return_value.ask.side_effect = [True, True, False, False, False, False]
+            mock_text.return_value.ask.side_effect = ["main", "3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "ACCESS_KEY", "ibl_admin", "admin@example.com"]
 
             config = prompt_setup(state)
 
@@ -277,10 +277,10 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
-            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, stripe_enabled, google_sso_enabled, reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, False, False, False, False, True]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, stripe_enabled, google_sso_enabled, microsoft_sso_enabled, reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, False, False, False, False, True]
             mock_path.return_value.ask.return_value = str(new_key)
-            mock_text.return_value.ask.side_effect = ["3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "ibl_admin", "admin@example.com"]
+            mock_text.return_value.ask.side_effect = ["main", "3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "ibl_admin", "admin@example.com"]
 
             config = prompt_setup(state)
 
@@ -303,10 +303,10 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
-            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, stripe_enabled, google_sso_enabled, reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, False, False, False, False, True]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, stripe_enabled, google_sso_enabled, microsoft_sso_enabled, reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, False, False, False, False, True]
             mock_path.return_value.ask.return_value = str(key)
-            mock_text.return_value.ask.side_effect = ["3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "ibl_admin", "admin@example.com"]
+            mock_text.return_value.ask.side_effect = ["main", "3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "ibl_admin", "admin@example.com"]
 
             config = prompt_setup(state)
 
@@ -329,10 +329,10 @@ class TestPromptSetup:
             patch("questionary.text") as mock_text,
         ):
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
-            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, stripe_enabled, google_sso_enabled, reuse credentials
-            mock_confirm.return_value.ask.side_effect = [True, False, False, False, False, True]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled, stripe_enabled, google_sso_enabled, microsoft_sso_enabled, reuse credentials
+            mock_confirm.return_value.ask.side_effect = [True, False, False, False, False, False, True]
             mock_path.return_value.ask.return_value = str(key)
-            mock_text.return_value.ask.side_effect = ["3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "ibl_admin", "admin@example.com"]
+            mock_text.return_value.ask.side_effect = ["main", "3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "ibl_admin", "admin@example.com"]
 
             config = prompt_setup(state)
 
@@ -358,15 +358,16 @@ class TestPromptSetup:
             ]
             # confirms: enable_ai, create_playwright_platforms, smtp_enabled,
             #          smtp_use_tls, smtp_use_ssl, stripe_enabled,
-            #          google_sso_enabled, reuse_credentials
+            #          google_sso_enabled, microsoft_sso_enabled, reuse_credentials
             mock_confirm.return_value.ask.side_effect = [
-                True, False, True, True, False, False, False, True,
+                True, False, True, True, False, False, False, False, True,
             ]
-            # texts: cli_ops_tag, smtp_host, smtp_port, smtp_username,
+            # texts: platform_name, cli_ops_tag, smtp_host, smtp_port, smtp_username,
             #        smtp_sender_email,
             #        github_org, cli_ops_repo, prod_images_repo,
             #        admin_username, admin_email
             mock_text.return_value.ask.side_effect = [
+                "main",
                 "3.19.0",
                 "email-smtp.us-east-1.amazonaws.com",
                 "587",
@@ -415,16 +416,17 @@ class TestPromptSetup:
                 "Admin1234",
             ]
             # confirms: enable_ai, create_playwright_platforms, smtp_enabled,
-            #          stripe_enabled, google_sso_enabled, reuse_credentials
+            #          stripe_enabled, google_sso_enabled, microsoft_sso_enabled, reuse_credentials
             mock_confirm.return_value.ask.side_effect = [
-                True, False, False, True, False, True,
+                True, False, False, True, False, False, True,
             ]
             # selects: stripe_mode
             mock_select.return_value.ask.return_value = "test"
-            # texts: cli_ops_tag, pricing_table_id, pricing_table_id_returning,
+            # texts: platform_name, cli_ops_tag, pricing_table_id, pricing_table_id_returning,
             #        github_org, cli_ops_repo, prod_images_repo,
             #        admin_username, admin_email
             mock_text.return_value.ask.side_effect = [
+                "main",
                 "3.19.0",
                 "prctbl_abcdef",
                 "",
@@ -470,14 +472,15 @@ class TestPromptSetup:
                 "Admin1234",
             ]
             # confirms: enable_ai, create_playwright_platforms, smtp_enabled,
-            #          stripe_enabled, google_sso_enabled, reuse_credentials
+            #          stripe_enabled, google_sso_enabled, microsoft_sso_enabled, reuse_credentials
             mock_confirm.return_value.ask.side_effect = [
-                True, False, False, False, True, True,
+                True, False, False, False, True, False, True,
             ]
-            # texts: cli_ops_tag, google_sso_client_id, google_sso_organization,
+            # texts: platform_name, cli_ops_tag, google_sso_client_id, google_sso_organization,
             #        github_org, cli_ops_repo, prod_images_repo,
             #        admin_username, admin_email
             mock_text.return_value.ask.side_effect = [
+                "main",
                 "3.19.0",
                 "client-id.apps.googleusercontent.com",
                 "test-org",
@@ -496,6 +499,89 @@ class TestPromptSetup:
         assert config.google_sso_organization == "test-org"
         # client_secret is excluded from JSON serialization
         assert '"google_sso_client_secret"' not in config.model_dump_json()
+
+    def test_full_flow_microsoft_sso_enabled(self, tmp_path):
+        """When operator answers yes to Microsoft SSO, client_id/secret/tenant/org are
+        collected, platform_name drives backend_name, and the client_secret is excluded
+        from JSON serialization."""
+        from iblai_infra.prompts.setup import prompt_setup
+
+        state = self._make_state(tmp_path)
+
+        with (
+            patch("questionary.password") as mock_password,
+            patch("questionary.confirm") as mock_confirm,
+            patch("questionary.text") as mock_text,
+        ):
+            # passwords: microsoft_sso_client_secret, GitHub token, skip OpenAI, admin password
+            mock_password.return_value.ask.side_effect = [
+                "PLACEHOLDER_MS_CLIENT_SECRET",
+                "ghp_testtoken",
+                "",
+                "Admin1234",
+            ]
+            # confirms: enable_ai, create_playwright_platforms, smtp_enabled,
+            #          stripe_enabled, google_sso_enabled, microsoft_sso_enabled,
+            #          reuse_credentials
+            mock_confirm.return_value.ask.side_effect = [
+                True, False, False, False, False, True, True,
+            ]
+            # texts: platform_name, cli_ops_tag,
+            #        microsoft_sso_client_id, microsoft_sso_tenant_id, microsoft_sso_organization,
+            #        github_org, cli_ops_repo, prod_images_repo,
+            #        admin_username, admin_email
+            mock_text.return_value.ask.side_effect = [
+                "tenant-platform",
+                "3.19.0",
+                "11111111-2222-3333-4444-555555555555",
+                "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                "test-org",
+                "iblai",
+                "iblai-cli-ops",
+                "iblai-prod-images",
+                "ibl_admin",
+                "admin@example.com",
+            ]
+
+            config = prompt_setup(state)
+
+        assert config.platform_name == "tenant-platform"
+        assert config.microsoft_sso_enabled is True
+        assert config.microsoft_sso_client_id == "11111111-2222-3333-4444-555555555555"
+        assert config.microsoft_sso_client_secret == "PLACEHOLDER_MS_CLIENT_SECRET"
+        assert config.microsoft_sso_tenant_id == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        assert config.microsoft_sso_organization == "test-org"
+        # client_secret is excluded from JSON serialization
+        assert '"microsoft_sso_client_secret"' not in config.model_dump_json()
+
+    def test_platform_name_lowercased_and_stripped(self, tmp_path):
+        """Operator-supplied platform names with trailing whitespace or mixed case
+        are normalized to lowercase + stripped (used as dict key in
+        Django + as URL component in backend_name)."""
+        from iblai_infra.prompts.setup import prompt_setup
+
+        state = self._make_state(tmp_path)
+
+        with (
+            patch("questionary.password") as mock_password,
+            patch("questionary.confirm") as mock_confirm,
+            patch("questionary.text") as mock_text,
+        ):
+            mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
+            mock_confirm.return_value.ask.side_effect = [True, False, False, False, False, False, True]
+            mock_text.return_value.ask.side_effect = [
+                "  TenantPlatform  ",  # mixed case + whitespace
+                "3.19.0",
+                "iblai",
+                "iblai-cli-ops",
+                "iblai-prod-images",
+                "ibl_admin",
+                "admin@example.com",
+            ]
+
+            config = prompt_setup(state)
+
+        assert config.platform_name == "tenantplatform"
 
 
 # ---------------------------------------------------------------------------
@@ -655,7 +741,7 @@ class TestPromptResetup:
             mock_password.return_value.ask.side_effect = ["ghp_testtoken", "", "Admin1234"]
             mock_confirm.return_value.ask.return_value = True
             # text prompts: cli_ops_release_tag, admin_username, admin_email
-            mock_text.return_value.ask.side_effect = ["3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "ibl_admin", "admin@example.com"]
+            mock_text.return_value.ask.side_effect = ["main", "3.19.0", "iblai", "iblai-cli-ops", "iblai-prod-images", "ibl_admin", "admin@example.com"]
 
             config = prompt_resetup(state)
 

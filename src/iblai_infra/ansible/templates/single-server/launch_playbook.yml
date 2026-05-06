@@ -32,6 +32,7 @@
     - data_seeding
     - stripe_config
     - google_sso_config
+    - microsoft_sso_config
 
   tasks:
     - name: Set up Playwright test platforms

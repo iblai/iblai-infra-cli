@@ -97,6 +97,22 @@ def _prompt_platform_config(
 
     ui.success(f"Domain: [highlight]{base_domain}[/highlight]")
 
+    # Platform name — first thing the operator sets in step 2. Drives the
+    # SSO ansible roles (backend_name = `<platform_name>-oauth2`,
+    # other_settings.platform_key). Defaults to "main" for canonical IBL
+    # single-tenant deploys; tenant deployments override.
+    platform_name = questionary.text(
+        "Platform name (lowercase identifier, default 'main'):",
+        default="main",
+        validate=lambda v: bool(v.strip()) or "Platform name is required",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if platform_name is None:
+        ui.abort()
+    platform_name = platform_name.strip().lower()
+    ui.success(f"Platform: [highlight]{platform_name}[/highlight]")
+
     edx_version = "sumac"
     ui.success(f"Open edX version: [highlight]Sumac[/highlight]")
 
@@ -143,9 +159,11 @@ def _prompt_platform_config(
     smtp_fields = _prompt_smtp_config()
     stripe_fields = _prompt_stripe_config()
     google_sso_fields = _prompt_google_sso_config()
+    microsoft_sso_fields = _prompt_microsoft_sso_config()
 
     return {
         "base_domain": base_domain,
+        "platform_name": platform_name,
         "edx_version": edx_version,
         "env_config": env_config,
         "cli_ops_release_tag": cli_ops_release_tag,
@@ -154,6 +172,7 @@ def _prompt_platform_config(
         **smtp_fields,
         **stripe_fields,
         **google_sso_fields,
+        **microsoft_sso_fields,
     }
 
 
@@ -420,6 +439,83 @@ def _prompt_google_sso_config() -> dict:
         "google_sso_client_id": client_id,
         "google_sso_client_secret": client_secret,
         "google_sso_organization": organization,
+    }
+
+
+def _prompt_microsoft_sso_config() -> dict:
+    """Optionally collect Microsoft (Azure AD) SSO credentials.
+
+    Default is "skip" — when answered "no" all five microsoft_sso_* fields
+    stay at their model defaults and the ansible role no-ops. When
+    answered "yes", we gather the Azure AD Application (Client) ID,
+    Client Secret value, and Tenant ID, plus an optional organization
+    short_name. The role then writes a Django `OAuth2ProviderConfig` row
+    on the LMS for the `azuread-oauth2` slug (with `backend_name` derived
+    from the operator's `platform_name`) AND patches
+    `IBL_EDX.IBL_EDX_BASE_OAUTH_SSO_BACKEND` in `/ibl/config.yml`. After
+    config save the role restarts edX so the new Django settings take
+    effect. Client secret is collected via `questionary.password` (no
+    echo); none of these values are persisted locally — they ride
+    extra_vars to ansible at run time only.
+    """
+    enabled = questionary.confirm(
+        "Configure Microsoft (Azure AD) SSO? (creates an OAuth2ProviderConfig + IBL_EDX_BASE_OAUTH_SSO_BACKEND block)",
+        default=False,
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if enabled is None:
+        ui.abort()
+    if not enabled:
+        ui.success("Microsoft SSO: [highlight]Skip[/highlight]")
+        return {"microsoft_sso_enabled": False}
+
+    client_id = questionary.text(
+        "Microsoft Application (Client) ID:",
+        validate=lambda v: bool(v.strip()) or "Application (Client) ID is required",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if client_id is None:
+        ui.abort()
+    client_id = client_id.strip()
+
+    client_secret = questionary.password(
+        "Microsoft Client Secret value:",
+        validate=lambda v: bool(v) or "Client Secret value is required",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if client_secret is None:
+        ui.abort()
+
+    tenant_id = questionary.text(
+        "Microsoft Azure AD Tenant ID:",
+        validate=lambda v: bool(v.strip()) or "Tenant ID is required",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if tenant_id is None:
+        ui.abort()
+    tenant_id = tenant_id.strip()
+
+    organization = questionary.text(
+        "Organization short name (optional, leave blank to skip):",
+        default="",
+        style=ui.PROMPT_STYLE,
+        qmark=ui.QMARK,
+    ).ask()
+    if organization is None:
+        ui.abort()
+    organization = organization.strip()
+
+    ui.success("Microsoft SSO: [highlight]Enabled[/highlight]")
+    return {
+        "microsoft_sso_enabled": True,
+        "microsoft_sso_client_id": client_id,
+        "microsoft_sso_client_secret": client_secret,
+        "microsoft_sso_tenant_id": tenant_id,
+        "microsoft_sso_organization": organization,
     }
 
 
