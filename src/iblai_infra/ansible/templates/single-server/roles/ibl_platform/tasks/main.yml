@@ -234,6 +234,30 @@
     HOME: "/home/{{ ansible_user }}"
     IBL_ROOT: "{{ ibl_root }}/"
 
+# S3 access keys at the root of /ibl/config.yml. Consumed by iblai-cli-ops
+# templating + the running DM / edX containers for read / write on the
+# three buckets Terraform created. These are the customer-created keys
+# scoped by `runtime-iam-policy.json` (S3-only) — NOT the ECR keys (which
+# live in ~/.aws/credentials [default] — see the `awscli` role).
+- name: Write S3 access keys to /ibl/config.yml root
+  become: false
+  shell: |
+    export PYENV_ROOT="{{ pyenv_root }}"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+    pyenv activate "{{ venv_name }}"
+    ibl config save --set AWS_ACCESS_KEY_ID='{{ aws_access_key_id }}' && \
+    ibl config save --set AWS_SECRET_ACCESS_KEY='{{ aws_secret_access_key }}' && \
+    ibl config save --set AWS_DEFAULT_REGION='{{ aws_default_region }}'
+  args:
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+  no_log: true
+  when: aws_access_key_id | length > 0 and aws_secret_access_key | length > 0
+
 - name: Enable unified API gateway
   become: false
   shell: |
@@ -428,6 +452,8 @@
   when: enable_ai | bool
 
 - name: Login to ECR
+  # Uses ~/.aws/credentials [default] profile (populated by the `awscli`
+  # role with the ECR pull keys ibl.ai supplied via ecr_aws_*).
   become: false
   shell: |
     aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 765174860755.dkr.ecr.us-east-1.amazonaws.com
@@ -435,6 +461,3 @@
     executable: /bin/bash
   environment:
     HOME: "/home/{{ ansible_user }}"
-    AWS_ACCESS_KEY_ID: "{{ aws_access_key_id }}"
-    AWS_SECRET_ACCESS_KEY: "{{ aws_secret_access_key }}"
-    AWS_DEFAULT_REGION: "{{ aws_default_region }}"

@@ -27,19 +27,28 @@
   changed_when: false
   ignore_errors: true
 
-- name: Configure AWS credentials
-  when: aws_access_key_id | length > 0 and aws_secret_access_key | length > 0
+# Writes the ECR pull credentials (ibl.ai-provided) to
+# ~/.aws/credentials [default] so `aws ecr get-login-password` picks them
+# up by default everywhere on the host. The S3 access keys (customer-
+# created post-provision) live in /ibl/config.yml — written by the
+# `ibl_platform` role, NOT here.
+#
+# `ecr_aws_*` falls back to `aws_*` upstream in runner.py when the
+# operator hasn't supplied a separate ECR set (older single-key-set
+# deployments).
+- name: Configure ECR credentials in ~/.aws/credentials [default]
+  when: ecr_aws_access_key_id | length > 0 and ecr_aws_secret_access_key | length > 0
   become: false
   block:
-    - name: Set AWS access key ID
-      command: /usr/local/bin/aws configure set aws_access_key_id "{{ aws_access_key_id }}"
+    - name: Set AWS access key ID (ECR)
+      command: /usr/local/bin/aws configure set aws_access_key_id "{{ ecr_aws_access_key_id }}"
 
-    - name: Set AWS secret access key
-      command: /usr/local/bin/aws configure set aws_secret_access_key "{{ aws_secret_access_key }}"
+    - name: Set AWS secret access key (ECR)
+      command: /usr/local/bin/aws configure set aws_secret_access_key "{{ ecr_aws_secret_access_key }}"
       no_log: true
 
-    - name: Set AWS default region
-      command: /usr/local/bin/aws configure set default.region "{{ aws_default_region }}"
+    - name: Set AWS default region (ECR)
+      command: /usr/local/bin/aws configure set default.region "{{ ecr_aws_default_region }}"
 
     - name: Set AWS output format
       command: /usr/local/bin/aws configure set output json

@@ -8,8 +8,15 @@
 - **README sub-section** under "Provision infrastructure" documenting the S3 IAM step + the scope table, plus a credential-set table clarifying that **ECR pull credentials are a separate IBL-provided handoff**, not part of this flow.
 
 ### Changed
-- **`.env.setup.example`** — the `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` comment block now explicitly directs the operator to use the S3-only runtime user the post-provision step mints, and calls out that ECR credentials are a separate handoff from IBL.
+- **Two-credential split end-to-end.** Previously a single `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` from `.env.setup` had to serve both ECR auth (IBL's account) and S3 access (customer's account) — works only when one key happens to have both scopes. Now:
+  - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` carry the **S3** keys (customer-created post-provision) and are written to the root of `/ibl/config.yml` by a new task in the `ibl_platform` role; consumed by DM / edX at runtime via iblai-cli-ops templating.
+  - New `ECR_AWS_ACCESS_KEY_ID` / `ECR_AWS_SECRET_ACCESS_KEY` (optional `ECR_AWS_DEFAULT_REGION`) carry the **ECR** keys (ibl.ai-provided). The `awscli` role writes these to `~/.aws/credentials` `[default]` profile on the host so `aws ecr get-login-password` finds them without env-var overrides anywhere.
+  - The four `Login to ECR` tasks across `ibl_spa`, `ibl_launch_services`, `ibl_platform`, `ibl_service_update` no longer set `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env-vars at command time — they rely on the default profile populated by `awscli`.
+  - `SetupConfig` gains `ecr_aws_access_key_id`, `ecr_aws_secret_access_key`, `ecr_aws_default_region` (all optional). Secret is `Field(exclude=True)`.
+  - `runner.py::_build_extra_vars` passes both sets as separate ansible extra-vars. When `ECR_AWS_*` is empty, the S3 keys fall through to the ECR slot — backwards-compatible with single-key-set deployments.
+- **`.env.setup.example`** now shows two clearly-labeled `AWS_*` blocks (S3 + ECR) with usage / destination spelled out inline.
 - **Section 4 of the README** (non-interactive `.env` flow) renumbered as a 3-step sequence (provision → mint S3 user → setup) so the IAM step isn't missed.
+- **README credential-set table** under "Provision infrastructure" gains a "Lives in" column documenting `/ibl/config.yml` root vs `~/.aws/credentials [default]` so the operator knows exactly where each set lands on the server.
 
 ## [1.10.0] — 2026-05-20
 

@@ -393,9 +393,22 @@ class SetupConfig(BaseModel):
     enable_ai: bool = True
     is_resetup: bool = False
     create_playwright_platforms: bool = False
+    # S3 access keys — customer-created post-provision (scoped to the three
+    # dm-media / dm-static / backups buckets Terraform created). Written to
+    # `/ibl/config.yml` root by the `ibl_platform` role; consumed by DM /
+    # edX at runtime via iblai-cli-ops templating.
     aws_access_key_id: str
     aws_secret_access_key: str
     aws_default_region: str
+    # ECR pull keys — provided by ibl.ai out-of-band. Written to
+    # `~/.aws/credentials` `[default]` profile on the host by the `awscli`
+    # role; consumed by `aws ecr get-login-password` in any role that does
+    # `docker login`. Optional — when empty, the S3 keys above fall through
+    # (backwards-compatible with one-key-set deployments). Secret is
+    # `Field(exclude=True)` so it never lands in `state.json`.
+    ecr_aws_access_key_id: str = ""
+    ecr_aws_secret_access_key: str = Field(default="", exclude=True)
+    ecr_aws_default_region: str = ""
     git_access_token: str
     # GitHub org + repo names for the two private packages this setup
     # installs (iblai-prod-images directly, iblai-cli-ops transitively).

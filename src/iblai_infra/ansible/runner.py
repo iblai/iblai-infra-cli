@@ -462,10 +462,29 @@ class AnsibleRunner:
         """Build the extra-vars dict. Secrets are passed here, never to disk."""
         cli_ops_repo, cli_ops_subdir = parse_repo_path(self.config.cli_ops_repo)
         prod_images_repo, prod_images_subdir = parse_repo_path(self.config.prod_images_repo)
+        # Two AWS credential sets are surfaced as separate extra_vars so the
+        # ansible roles can place each set in the right destination:
+        #   - aws_*           → S3 access keys (customer-created post-
+        #                       provision). The `ibl_platform` role writes
+        #                       these to `/ibl/config.yml` root for DM / edX.
+        #   - ecr_aws_*       → IBL-provided ECR pull keys. The `awscli`
+        #                       role writes these to `~/.aws/credentials`
+        #                       `[default]` so `aws ecr get-login-password`
+        #                       picks them up.
+        # When the operator hasn't supplied ECR_AWS_* in .env.setup (older
+        # single-key-set deployments), fall through to the S3 keys so the
+        # ECR login path still works — with the caveat that the same key
+        # is doing both jobs.
+        ecr_key_id = self.config.ecr_aws_access_key_id or self.config.aws_access_key_id
+        ecr_secret = self.config.ecr_aws_secret_access_key or self.config.aws_secret_access_key
+        ecr_region = self.config.ecr_aws_default_region or self.config.aws_default_region
         extra = {
             "aws_access_key_id": self.config.aws_access_key_id,
             "aws_secret_access_key": self.config.aws_secret_access_key,
             "aws_default_region": self.config.aws_default_region,
+            "ecr_aws_access_key_id": ecr_key_id,
+            "ecr_aws_secret_access_key": ecr_secret,
+            "ecr_aws_default_region": ecr_region,
             "git_access_token": self.config.git_access_token,
             "github_org": self.config.github_org,
             "cli_ops_repo": cli_ops_repo,

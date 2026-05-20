@@ -126,10 +126,12 @@ Terraform runs with real-time progress showing each resource as it's created.
 
 Two distinct AWS credential sets serve the running platform:
 
-| Credential set | Provided by | Used for |
-|---|---|---|
-| **S3** — the runtime user this section is about | You, in your own AWS account, post-provision | Read / write the three buckets Terraform just created |
-| **ECR** — image-registry pulls | AWS credentials provided by ibl.ai — or contact us at [ibl.ai/contact](https://ibl.ai/contact) | `docker login` against IBL's container registry |
+| Credential set | Provided by | Lives in (on the server) | Used for |
+|---|---|---|---|
+| **S3** — the runtime user this section is about | You, in your own AWS account, post-provision | `/ibl/config.yml` root (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`) | DM / edX runtime read / write on the three buckets Terraform created |
+| **ECR** — image-registry pulls | AWS credentials provided by ibl.ai — or contact us at [ibl.ai/contact](https://ibl.ai/contact) | `~/.aws/credentials` `[default]` profile | `aws ecr get-login-password` for `docker login` against IBL's registry |
+
+Two separate `AWS_*` blocks in `.env.setup` carry each set: `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` for S3, and `ECR_AWS_ACCESS_KEY_ID` / `ECR_AWS_SECRET_ACCESS_KEY` for ECR. If `ECR_AWS_*` is left blank, the S3 keys fall through to ECR (backwards-compatible with older single-key-set deployments).
 
 This section covers only the **S3** set.
 
