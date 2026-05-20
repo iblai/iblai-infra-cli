@@ -122,29 +122,38 @@ Sizing guidance: single / multi-server require a **100 GB minimum** root volume.
 
 Terraform runs with real-time progress showing each resource as it's created.
 
-#### After provision succeeds — create a runtime IAM user
+#### After provision succeeds — create an S3 IAM user
 
-The platform server bakes a single AWS access key into `/ibl/config.yml` for two ongoing purposes: **ECR pulls** (IBL's image registry, cross-account) and **S3 read/write** on the three buckets Terraform just created. Reusing your provisioning admin keys here is overkill — instead, mint a scoped runtime user in your own account.
+Two distinct AWS credential sets serve the running platform:
 
-When `provision` / `provision-env` finishes it prints the exact IAM policy JSON (also saved to `<workspace>/runtime-iam-policy.json`) plus three `aws` commands to copy-paste:
+| Credential set | Provided by | Used for |
+|---|---|---|
+| **S3** — the runtime user this section is about | You, in your own AWS account, post-provision | Read / write the three buckets Terraform just created |
+| **ECR** — image-registry pulls | IBL (out-of-band handoff) | `docker login` against IBL's container registry |
+
+This section covers only the **S3** set. ECR credentials are provided separately by IBL — follow their handoff procedure for those.
+
+When `provision` / `provision-env` finishes it prints the exact S3-only IAM policy JSON (also saved to `<workspace>/runtime-iam-policy.json`) plus three `aws` commands to copy-paste:
 
 ```bash
-aws iam create-user --user-name <project>-<env>-runtime
+aws iam create-user --user-name <project>-<env>-s3-runtime
 aws iam put-user-policy \
-    --user-name <project>-<env>-runtime \
-    --policy-name iblai-runtime \
+    --user-name <project>-<env>-s3-runtime \
+    --policy-name iblai-s3-runtime \
     --policy-document file://<workspace>/runtime-iam-policy.json
-aws iam create-access-key --user-name <project>-<env>-runtime
+aws iam create-access-key --user-name <project>-<env>-s3-runtime
 ```
 
-Paste the resulting `AccessKeyId` + `SecretAccessKey` into `.env.setup` (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`). The policy scope is tight:
+Paste the resulting `AccessKeyId` + `SecretAccessKey` into `.env.setup` (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`).
 
-| | Resource | Verbs |
-|---|---|---|
-| S3 | The three buckets Terraform created (no wildcards) | `Get/Put/Delete/Acl/ListBucket` |
-| ECR | IBL's `arn:aws:ecr:<region>:<iblai-account>:repository/*` | `GetAuthorizationToken`, `BatchGetImage`, `BatchCheckLayerAvailability`, `GetDownloadUrlForLayer` |
+**Policy scope** — S3 only, scoped to the literal bucket ARNs Terraform created (no wildcards):
 
-No bucket-policy mutation, no lifecycle config, no IAM rights. Safe to leave on the box for the lifetime of the deployment. Skipped automatically for `--deployment-type call-server` (no S3 buckets).
+| Resource | Verbs |
+|---|---|
+| Objects in the three buckets (`arn:aws:s3:::<bucket>/*`) | `GetObject` `PutObject` `DeleteObject` `GetObjectAcl` `PutObjectAcl` |
+| The buckets themselves (`arn:aws:s3:::<bucket>`) | `ListBucket` `GetBucketLocation` |
+
+No `s3:*`, no bucket-policy mutation, no lifecycle / encryption config, no IAM rights. Skipped automatically for `--deployment-type call-server` (no S3 buckets).
 
 ### 3. Setup the platform
 

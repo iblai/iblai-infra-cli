@@ -9,8 +9,6 @@ import pytest
 
 from iblai_infra.models import DeploymentType
 from iblai_infra.runtime_iam import (
-    IBLAI_ECR_ACCOUNT_ID,
-    IBLAI_ECR_REGION,
     POLICY_FILENAME,
     build_runtime_iam_policy,
     extract_bucket_names,
@@ -23,12 +21,18 @@ class TestBuildPolicy:
         policy = build_runtime_iam_policy(["my-backups"])
         assert policy["Version"] == "2012-10-17"
         sids = {s["Sid"] for s in policy["Statement"]}
-        assert sids == {
-            "PlatformBucketObjects",
-            "PlatformBucketList",
-            "ECRAuth",
-            "ECRPullPlatformImages",
-        }
+        # S3-only by design — ECR credentials are provided separately by IBL.
+        assert sids == {"PlatformBucketObjects", "PlatformBucketList"}
+
+    def test_no_ecr_statements(self):
+        # IBL's image registry creds are an out-of-band handoff. The
+        # customer-created policy must not include ECR scope.
+        policy = build_runtime_iam_policy(["b"])
+        for stmt in policy["Statement"]:
+            for action in stmt["Action"]:
+                assert not action.startswith("ecr:"), (
+                    f"runtime IAM policy must be S3-only; found {action!r}"
+                )
 
     def test_three_buckets_arn_shape(self):
         policy = build_runtime_iam_policy([
@@ -57,21 +61,6 @@ class TestBuildPolicy:
         # Bucket policy / lifecycle / encryption mutations stay out.
         for forbidden in ("s3:PutBucketPolicy", "s3:DeleteBucketPolicy", "s3:PutLifecycleConfiguration"):
             assert forbidden not in obj_actions
-
-    def test_ecr_resource_targets_iblai_account(self):
-        policy = build_runtime_iam_policy(["b"])
-        pull = next(s for s in policy["Statement"] if s["Sid"] == "ECRPullPlatformImages")
-        assert pull["Resource"] == (
-            f"arn:aws:ecr:{IBLAI_ECR_REGION}:{IBLAI_ECR_ACCOUNT_ID}:repository/*"
-        )
-
-    def test_ecr_auth_is_wildcard(self):
-        # ecr:GetAuthorizationToken can ONLY be granted on Resource: "*"
-        # — AWS rejects scoped ARNs for this action.
-        policy = build_runtime_iam_policy(["b"])
-        auth = next(s for s in policy["Statement"] if s["Sid"] == "ECRAuth")
-        assert auth["Resource"] == "*"
-        assert auth["Action"] == ["ecr:GetAuthorizationToken"]
 
     def test_empty_buckets_raises(self):
         with pytest.raises(ValueError, match="at least one S3 bucket"):
