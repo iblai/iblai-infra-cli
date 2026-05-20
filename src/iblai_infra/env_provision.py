@@ -211,7 +211,7 @@ def _build_network(env: dict[str, str]) -> NetworkConfig:
 def _build_compute(env: dict[str, str]) -> ComputeConfig:
     instance_type = (env.get("INSTANCE_TYPE") or "t3.2xlarge").strip()
     volume_type = (env.get("VOLUME_TYPE") or "gp3").strip()
-    volume_raw = (env.get("VOLUME_SIZE") or "50").strip()
+    volume_raw = (env.get("VOLUME_SIZE") or "100").strip()
     try:
         volume_size = int(volume_raw)
     except ValueError:

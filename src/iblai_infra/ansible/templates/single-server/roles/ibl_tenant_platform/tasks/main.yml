@@ -1,0 +1,216 @@
+---
+# Launch a tenant platform via `run_launch_steps` (NOT raw
+# `Platform.objects.create()`) so the launcher's state machine fires
+# all the after_launch signals — default apps, edX hooks,
+# UserPlatformLink with the right role flags, etc. This mirrors the
+# shape of a canonical multi-tenant deployment, where a Platform +
+# UserPlatformLink + tenant admin User were all created together by
+# the launcher.
+#
+# Gating:
+#   - Skipped when `platform_name == 'main'` (the IBL default tenant
+#     that the platform itself maintains via `ibl launch`).
+#   - Skipped on re-runs when a Platform with key=platform_name already
+#     exists — the launcher does not upsert, so re-running it would
+#     either create a duplicate or 500 at the DB layer.
+#
+# Tenant admin credentials are derived from `platform_name` +
+# `base_domain`:
+#     username = <key with hyphens/underscores stripped>admin
+#     email    = <username>@<base_domain>
+#     password = secrets.token_hex(16)   (generated on each launch)
+# The generated password is surfaced via the IBLAI_FIXTURE_OUTPUT
+# markers (see runner.py::_maybe_capture_fixture) — it's printed
+# AFTER the Rich Live display tears down so the operator gets one
+# clean chance to copy it. It is never persisted to disk.
+
+- name: Wait for DM web container ready (tenant launch)
+  become: false
+  ansible.builtin.shell:
+    cmd: |
+      docker inspect --format='{{ '{{' }}.State.Running{{ '}}' }}' ibl_dm_pro_web 2>/dev/null | grep -q true && \
+      docker exec ibl_dm_pro_web echo "DM ready"
+    executable: /bin/bash
+  register: dm_ready_tenant
+  until: dm_ready_tenant.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+  when: (platform_name | default('main')) != 'main'
+
+# Write PLATFORM_NAME (uppercase) at the root of /ibl/config.yml so the
+# iblai-cli-ops templates that read it (LMS display name, etc.) pick up
+# the tenant identity. Matches the on-disk shape seen on the canonical
+# multi-tenant deployments (`PLATFORM_NAME: ACME`). `ibl config save --set` is
+# naturally idempotent — re-running with the same value is a no-op.
+# Skipped when `platform_name == 'main'` per the same gate as the
+# launcher tasks below.
+- name: Set PLATFORM_NAME (uppercase) in /ibl/config.yml
+  become: false
+  ansible.builtin.shell:
+    cmd: |
+      export PYENV_ROOT="{{ pyenv_root }}"
+      export PATH="$PYENV_ROOT/bin:$PATH"
+      eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+      pyenv activate "{{ venv_name }}"
+      ibl config save --set 'PLATFORM_NAME={{ platform_name | upper }}'
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+  when: (platform_name | default('main')) != 'main'
+
+- name: Check whether tenant platform already exists
+  become: false
+  ansible.builtin.shell:
+    cmd: |
+      docker exec -i ibl_dm_pro_web python manage.py shell <<'PY'
+      from core.models import Platform
+      key = "{{ platform_name }}"
+      p = Platform.objects.filter(key=key).first()
+      if p is None:
+          print("TENANT_PLATFORM_STATUS:ABSENT key=" + key)
+      else:
+          print("TENANT_PLATFORM_STATUS:PRESENT key=" + key + " pk=" + str(p.pk))
+      PY
+    executable: /bin/bash
+  register: tenant_check
+  changed_when: false
+  when: (platform_name | default('main')) != 'main'
+
+- name: Launch tenant platform via run_launch_steps
+  become: false
+  ansible.builtin.shell:
+    cmd: |
+      docker exec -i ibl_dm_pro_web python manage.py shell <<'PY'
+      import logging
+      import secrets
+      import sys
+
+      # Quiet down the transitions state-machine chatter so the captured
+      # stdout stays readable; the launcher prints one INFO line per
+      # state transition by default.
+      logging.getLogger("transitions").setLevel(logging.WARNING)
+
+      from dl_iblai_services_app.services.launchers import run_launch_steps
+
+      KEY = "{{ platform_name }}"
+      BASE_DOMAIN = "{{ base_domain }}"
+
+      # admin_username must be alphanumeric (skill §4); strip hyphens and
+      # underscores from the platform key.
+      admin_username = (KEY + "admin").replace("-", "").replace("_", "").lower()
+      admin_email = admin_username + "@" + BASE_DOMAIN
+      display_name = KEY.replace("-", " ").replace("_", " ").title()
+      password = secrets.token_hex(16)
+
+      launch_data = {
+          "username": admin_username,
+          "email": admin_email,
+          "firstname": display_name,
+          "lastname": "Admin",
+          "password": password,
+          "role": "org-instructor",
+          "org": KEY,
+          "key": KEY,
+          "name": display_name,
+          "lms_url": "https://learn." + KEY + "." + BASE_DOMAIN,
+          "cms_url": "https://studio.learn." + KEY + "." + BASE_DOMAIN,
+          "portal_url": KEY + "." + BASE_DOMAIN,
+      }
+      resp = run_launch_steps(launch_data)
+      if not resp.get("success"):
+          print("TENANT_LAUNCH:FAILED message=" + str(resp.get("message")))
+          print("TRACEBACK: " + str(resp.get("traceback")))
+          sys.exit(1)
+
+      # Marker block parsed by the follow-up debug task. Keep on its own
+      # lines for readability — the debug task wraps these in
+      # IBLAI_FIXTURE_OUTPUT_BEGIN/END so the runner replays them after
+      # the Live display tears down.
+      print("====TENANT_ADMIN_CREDS_BEGIN====")
+      print("Platform key:    " + KEY)
+      print("Platform name:   " + display_name)
+      print("Admin username:  " + admin_username)
+      print("Admin email:     " + admin_email)
+      print("Admin password:  " + password)
+      print("Launch ID:       " + str(resp.get("id")))
+      print("LMS URL:         " + launch_data["lms_url"])
+      print("CMS URL:         " + launch_data["cms_url"])
+      print("Portal URL:      " + launch_data["portal_url"])
+      print("====TENANT_ADMIN_CREDS_END====")
+      print("TENANT_LAUNCH:OK key=" + KEY)
+      PY
+    executable: /bin/bash
+  register: tenant_launch
+  changed_when: "'TENANT_LAUNCH:OK' in (tenant_launch.stdout | default(''))"
+  no_log: true  # keep the generated password out of -vvv ansible logs
+  when:
+    - (platform_name | default('main')) != 'main'
+    - "'TENANT_PLATFORM_STATUS:ABSENT' in (tenant_check.stdout | default(''))"
+
+# Reprint the generated admin password through the fixture-output
+# pipeline so the operator sees it AFTER the Rich Live display tears
+# down. Ansible's default callback JSON-encodes multi-line debug msgs
+# onto a single stdout line, which is exactly what
+# `_maybe_capture_fixture` in runner.py expects (both BEGIN/END markers
+# on the same line).
+- name: Show tenant admin credentials (one-time, save this output)
+  ansible.builtin.debug:
+    msg: |
+      IBLAI_FIXTURE_OUTPUT_BEGIN
+      TENANT PLATFORM LAUNCHED — SAVE THIS OUTPUT
+      The admin password below is generated fresh on every launch and
+      is NEVER persisted to disk. Capture it now.
+
+      {{ tenant_launch.stdout_lines | default([]) | join('\n') }}
+      IBLAI_FIXTURE_OUTPUT_END
+  when:
+    - (platform_name | default('main')) != 'main'
+    - tenant_launch is defined
+    - tenant_launch.changed | default(false)
+
+# Defense-in-depth: ensure show_paywall=False AND is_advertising=False on
+# the tenant Platform row, regardless of how the launcher / model defaults
+# behave today. Matches the canonical multi-tenant shape (Platform.show_paywall=False,
+# is_advertising=False). Runs whether the launcher ran fresh OR was skipped
+# because the platform already exists — so re-runs reconcile any flag drift.
+# `.update()` is idempotent: writes only if the resolved value differs, and
+# matches zero rows if the platform doesn't exist (no-op).
+- name: Ensure tenant paywall + advertising disabled
+  become: false
+  ansible.builtin.shell:
+    cmd: |
+      docker exec -i ibl_dm_pro_web python manage.py shell <<'PY'
+      from core.models import Platform
+      key = "{{ platform_name }}"
+      changed = Platform.objects.filter(key=key).exclude(
+          show_paywall=False, is_advertising=False,
+      ).update(show_paywall=False, is_advertising=False)
+      if changed:
+          print(f"PAYWALL_FLAGS:UPDATED key={key} rows={changed}")
+      else:
+          print(f"PAYWALL_FLAGS:UNCHANGED key={key}")
+      PY
+    executable: /bin/bash
+  register: paywall_enforce
+  changed_when: "'PAYWALL_FLAGS:UPDATED' in (paywall_enforce.stdout | default(''))"
+  when: (platform_name | default('main')) != 'main'
+
+- name: Confirm tenant platform skipped (already present)
+  ansible.builtin.debug:
+    msg: >-
+      Tenant platform '{{ platform_name }}' already exists — skipping launcher
+      (run_launch_steps does not upsert). Manage the existing Platform / admin
+      via the DM Django shell if you need to repair flags.
+  when:
+    - (platform_name | default('main')) != 'main'
+    - "'TENANT_PLATFORM_STATUS:PRESENT' in (tenant_check.stdout | default(''))"
+
+- name: Confirm tenant platform skipped (platform_name == 'main')
+  ansible.builtin.debug:
+    msg: >-
+      platform_name='main' — skipping tenant launch (the IBL default tenant is
+      maintained by `ibl launch`, not by this role).
+  when: (platform_name | default('main')) == 'main'

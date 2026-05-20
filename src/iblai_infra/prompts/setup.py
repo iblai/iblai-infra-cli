@@ -8,7 +8,44 @@ from pathlib import Path
 import questionary
 
 from iblai_infra import ui
-from iblai_infra.models import ProjectState, SetupConfig, SSHKeyMethod
+from iblai_infra.models import (
+    ProjectState,
+    RESERVED_ADMIN_USERNAMES,
+    RESERVED_PLATFORM_NAMES,
+    SetupConfig,
+    SSHKeyMethod,
+    is_reserved_admin_username,
+    is_reserved_platform_name,
+)
+
+
+def _validate_admin_username(value: str) -> bool | str:
+    """questionary-compatible validator. Returns True or an error string."""
+    s = (value or "").strip()
+    if not s:
+        return "Admin username is required"
+    if is_reserved_admin_username(s):
+        reserved = ", ".join(sorted(RESERVED_ADMIN_USERNAMES))
+        return f"'{s}' is reserved for system use. Reserved: {reserved}"
+    return True
+
+
+def _validate_tenant_platform_name(value: str) -> bool | str:
+    """questionary-compatible validator. Blank is accepted (resolves to
+    `main` implicitly downstream). Explicit `main` is rejected so the
+    operator can't co-opt the system default tenant.
+    """
+    s = (value or "").strip().lower()
+    if not s:
+        return True
+    if is_reserved_platform_name(s):
+        reserved = ", ".join(sorted(RESERVED_PLATFORM_NAMES))
+        return (
+            f"'{s}' is reserved for the system default tenant. "
+            f"Leave blank to use the default, or pick a different name. "
+            f"Reserved: {reserved}"
+        )
+    return True
 
 SETUP_STEPS = 3
 BOOTSTRAP_STEPS = 4
@@ -97,21 +134,26 @@ def _prompt_platform_config(
 
     ui.success(f"Domain: [highlight]{base_domain}[/highlight]")
 
-    # Platform name — first thing the operator sets in step 2. Drives the
-    # SSO ansible roles (backend_name = `<platform_name>-oauth2`,
-    # other_settings.platform_key). Defaults to "main" for canonical IBL
-    # single-tenant deploys; tenant deployments override.
+    # Platform name — drives the SSO ansible roles (backend_name =
+    # `<platform_name>-oauth2`, other_settings.platform_key) AND the
+    # ibl_tenant_platform role (launches a Platform + admin via
+    # run_launch_steps when value != 'main'). Blank input resolves to
+    # 'main' implicitly (the system default tenant the platform itself
+    # creates). Operators can't pick 'main' explicitly — it's reserved.
     platform_name = questionary.text(
-        "Platform name (lowercase identifier, default 'main'):",
-        default="main",
-        validate=lambda v: bool(v.strip()) or "Platform name is required",
+        "Tenant platform name (leave blank for default 'main', no tenant launch):",
+        default="",
+        validate=_validate_tenant_platform_name,
         style=ui.PROMPT_STYLE,
         qmark=ui.QMARK,
     ).ask()
     if platform_name is None:
         ui.abort()
-    platform_name = platform_name.strip().lower()
-    ui.success(f"Platform: [highlight]{platform_name}[/highlight]")
+    platform_name = platform_name.strip().lower() or "main"
+    if platform_name == "main":
+        ui.success("Platform: [highlight]main[/highlight] (default, no tenant launch)")
+    else:
+        ui.success(f"Tenant platform: [highlight]{platform_name}[/highlight] (will be launched)")
 
     edx_version = "sumac"
     ui.success(f"Open edX version: [highlight]Sumac[/highlight]")
@@ -560,7 +602,7 @@ def _prompt_credentials(
     cli_ops_repo = questionary.text(
         "CLI ops repo (or repo/subdir for monorepo):",
         default="iblai-cli-ops",
-        instruction="(e.g. iblai-cli-ops, or kaplan-iblai-infra-ops/iblai-cli-ops)",
+        instruction="(e.g. iblai-cli-ops, or <client>-iblai-infra-ops/iblai-cli-ops)",
         validate=lambda v: len(v.strip()) > 0 or "Required",
         style=ui.PROMPT_STYLE,
         qmark=ui.QMARK,
@@ -572,7 +614,7 @@ def _prompt_credentials(
     prod_images_repo = questionary.text(
         "Prod images repo (or repo/subdir for monorepo):",
         default="iblai-prod-images",
-        instruction="(e.g. iblai-prod-images, or kaplan-iblai-infra-ops/kaplan-iblai-prod-images)",
+        instruction="(e.g. iblai-prod-images, or <client>-iblai-infra-ops/<client>-iblai-prod-images)",
         validate=lambda v: len(v.strip()) > 0 or "Required",
         style=ui.PROMPT_STYLE,
         qmark=ui.QMARK,
@@ -665,7 +707,8 @@ def _prompt_credentials(
 
     admin_username = questionary.text(
         "Admin username:",
-        default="ibl_admin",
+        default="platform_admin",
+        validate=_validate_admin_username,
         style=ui.PROMPT_STYLE,
         qmark=ui.QMARK,
     ).ask()

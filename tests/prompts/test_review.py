@@ -41,7 +41,7 @@ def _make_config(
             account_id="123456789012",
         ),
         network=NetworkConfig(vpn_ip="1.2.3.4"),
-        compute=ComputeConfig(instance_type="t3.2xlarge", volume_size=50, volume_type="gp3"),
+        compute=ComputeConfig(instance_type="t3.2xlarge", volume_size=100, volume_type="gp3"),
         ssh=SSHConfig(
             method=ssh_method,
             key_name="test-key",

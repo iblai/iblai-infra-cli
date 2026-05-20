@@ -169,7 +169,7 @@ class TestGenerateTfvars:
         assert 'environment = "dev"' in tfvars
         assert 'region = "us-east-1"' in tfvars
         assert 'instance_type = "t3.2xlarge"' in tfvars
-        assert "root_volume_size = 50" in tfvars
+        assert "root_volume_size = 100" in tfvars
         assert 'base_domain = "example.com"' in tfvars
         assert "create_key_pair = true" in tfvars
 

@@ -9,7 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -21,7 +21,7 @@ def parse_repo_path(value: str) -> tuple[str, str | None]:
 
     Used by the ansible runner to point installs at a package inside a
     monorepo. `iblai-cli-ops` -> ('iblai-cli-ops', None);
-    `kaplan-iblai-infra-ops/iblai-cli-ops` -> ('kaplan-iblai-infra-ops',
+    `<client>-iblai-infra-ops/iblai-cli-ops` -> ('<client>-iblai-infra-ops',
     'iblai-cli-ops').
     """
     cleaned = (value or "").strip().strip("/")
@@ -99,6 +99,22 @@ INSTANCE_TYPES: dict[str, str] = {
     "r5.2xlarge": "8 vCPU,  64 GB RAM — Memory optimized",
 }
 
+# RAM (in GB) for the instance types we publish in the picker. Used by the
+# prompt + launch flows to warn operators when they pick a 32 GB box —
+# AI-enabled platforms benefit substantially from 64 GB.
+INSTANCE_RAM_GB: dict[str, int] = {
+    "t3.xlarge": 16,
+    "t3.2xlarge": 32,
+    "m5.2xlarge": 32,
+    "m5.4xlarge": 64,
+    "r5.2xlarge": 64,
+}
+
+
+def instance_ram_gb(instance_type: str) -> int | None:
+    """Return RAM in GB for a known instance type, or None for unknown/custom."""
+    return INSTANCE_RAM_GB.get((instance_type or "").strip())
+
 # LiveKit (call-server) sizing recommendations. Per LiveKit's self-hosting
 # guide, SFU-only workloads fit on 2 vCPU boxes; egress/recording benefits
 # from CPU-optimized (c5) families.
@@ -164,10 +180,17 @@ class NetworkConfig(BaseModel):
 
 class ComputeConfig(BaseModel):
     instance_type: str = "t3.2xlarge"
-    volume_size: int = 50
+    volume_size: int = 100
     volume_type: str = "gp3"
     ami_id: str | None = None
 
+    # Floor of 20 GB here is the lower bound for *any* compute config —
+    # call-server reuses ComputeConfig as the synced-from-CallServerConfig
+    # placeholder and runs LiveKit on a small disk (~40 GB). The
+    # IBL-platform-minimum 100 GB floor is enforced on `InfraConfig` (and
+    # at the prompt / CLI / .env input layers) only for `DeploymentType.SINGLE`,
+    # since multi-server uses `MultiServerConfig.{app_server,services}_volume_size`
+    # and multi's own validator handles that case.
     @field_validator("volume_size")
     @classmethod
     def validate_volume(cls, v: int) -> int:
@@ -236,8 +259,8 @@ class MultiServerConfig(BaseModel):
     @field_validator("app_server_volume_size", "services_volume_size")
     @classmethod
     def validate_volume_sizes(cls, v: int) -> int:
-        if v < 20:
-            raise ValueError("Volume size must be at least 20 GB")
+        if v < 100:
+            raise ValueError("Volume size must be at least 100 GB")
         return v
 
 
@@ -290,6 +313,19 @@ class InfraConfig(BaseModel):
             raise ValueError("Project name must be 32 characters or fewer")
         return v
 
+    # Enforce the 100 GB platform-disk floor on SINGLE deployments. MULTI is
+    # already covered by `MultiServerConfig.validate_volume_sizes`; CALL uses
+    # `CallServerConfig.volume_size` (LiveKit only needs ~40 GB) and reuses
+    # ComputeConfig as a placeholder, so we don't enforce a 100 GB floor on it.
+    @model_validator(mode="after")
+    def _validate_single_server_volume_size(self) -> "InfraConfig":
+        if self.deployment_type == DeploymentType.SINGLE and self.compute.volume_size < 100:
+            raise ValueError(
+                "Single-server volume size must be at least 100 GB "
+                f"(got {self.compute.volume_size})"
+            )
+        return self
+
     @property
     def resource_prefix(self) -> str:
         return f"{self.project_name}-{self.environment.value}"
@@ -316,6 +352,34 @@ class ProjectState(BaseModel):
 # Setup config — contract between setup prompts and AnsibleRunner
 # ---------------------------------------------------------------------------
 
+# Usernames reserved for system / platform-internal use. The ibl_spa role
+# looks up `ibl_admin` to own the `spa-sso` and `ibl_web` OAuth2 Application
+# records on the LMS — that user is created by the platform's own bootstrap
+# (`ibl edx` / `ibl dm` launch flows) before ibl_spa runs. Operators must
+# pick a different name for their human superuser so the system account
+# stays separate.
+RESERVED_ADMIN_USERNAMES: frozenset[str] = frozenset({"ibl_admin"})
+
+
+def is_reserved_admin_username(value: str) -> bool:
+    """Return True if `value` collides with a reserved system username."""
+    return (value or "").strip().lower() in RESERVED_ADMIN_USERNAMES
+
+
+# Platform identifiers reserved for system / platform-internal use. `main`
+# is the IBL default tenant the platform itself creates and maintains via
+# `ibl launch`. Operators can't pick `main` as a tenant name — instead they
+# leave the field blank/unset, which silently resolves to `main` for SSO
+# backwards-compat (backend_name=`main-oauth2`) and skips the tenant
+# launcher (see `ibl_tenant_platform` ansible role).
+RESERVED_PLATFORM_NAMES: frozenset[str] = frozenset({"main"})
+
+
+def is_reserved_platform_name(value: str) -> bool:
+    """Return True if `value` collides with a reserved system platform name."""
+    return (value or "").strip().lower() in RESERVED_PLATFORM_NAMES
+
+
 class SetupConfig(BaseModel):
     """Variables needed to bootstrap a provisioned VM. Never persisted to disk."""
     ssh_private_key_path: Path
@@ -339,13 +403,13 @@ class SetupConfig(BaseModel):
     # own repos. Defaults reflect the canonical IBL deployment.
     github_org: str = "iblai"
     # Each repo field accepts either a bare repo name (`iblai-cli-ops`) or a
-    # `repo/subdir` path (`kaplan-iblai-infra-ops/iblai-cli-ops`) to point at
+    # `repo/subdir` path (`<client>-iblai-infra-ops/iblai-cli-ops`) to point at
     # a package inside a monorepo. Parsed by `parse_repo_path()` before the
     # install URL is built.
     cli_ops_repo: str = "iblai-cli-ops"
     prod_images_repo: str = "iblai-prod-images"
     openai_api_key: str = ""
-    admin_username: str = "ibl_admin"
+    admin_username: str = "platform_admin"
     admin_email: str = ""
     admin_password: str = ""
     # SMTP for outbound email (magic-link tests etc.). Disabled by default;
@@ -401,6 +465,18 @@ class SetupConfig(BaseModel):
     microsoft_sso_client_secret: str = Field(default="", exclude=True)
     microsoft_sso_tenant_id: str = ""
     microsoft_sso_organization: str = ""
+
+    @field_validator("admin_username")
+    @classmethod
+    def _validate_admin_username(cls, v: str) -> str:
+        s = (v or "").strip()
+        if not s:
+            raise ValueError("admin_username must not be empty")
+        if s.lower() in RESERVED_ADMIN_USERNAMES:
+            raise ValueError(
+                f"'{s}' is reserved for system use; pick a different admin username"
+            )
+        return s
 
 
 # ---------------------------------------------------------------------------

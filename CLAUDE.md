@@ -170,7 +170,7 @@ Sets `state.provider = "launch"` to distinguish from interactive provisioning.
 
 `iblai infra setup-env [<name>] -f .env` — non-interactive Ansible bootstrap from a `.env` file. Single-server only (multi/call rejected upstream). Two modes:
 
-- **Provisioned-name:** `setup-env kapsix -f .env` — loads `ProjectState`, derives `target_host` / `ssh_private_key_path` / `base_domain` / `aws_default_region` from it. `.env` only carries credentials, image tags, admin user, optional integrations.
+- **Provisioned-name:** `setup-env <name> -f .env` — loads `ProjectState`, derives `target_host` / `ssh_private_key_path` / `base_domain` / `aws_default_region` from it. `.env` only carries credentials, image tags, admin user, optional integrations.
 - **Free-standing:** `setup-env -f .env` (no name) — builds a synthetic `ProjectState` with `provider="bootstrap"` (matching `_run_setup_interactive`). `.env` must include `PROJECT_NAME`, `TARGET_HOST`, `SSH_PRIVATE_KEY_PATH`, `BASE_DOMAIN`.
 
 **Schema** (`.env.setup.example` is the source of truth). Always required: AWS keys, `GIT_TOKEN` (or `GIT_ACCESS_TOKEN`), `ADMIN_USERNAME`/`ADMIN_EMAIL`/`ADMIN_PASSWORD`. Free-standing additionally needs the four "where to deploy" fields. Optional integrations follow the same trigger pattern as `iblai infra launch` — SMTP enabled when `SMTP_HOST` set, Stripe when `STRIPE_SECRET_KEY` set, Google SSO when `GOOGLE_SSO_CLIENT_ID` set, Microsoft SSO when `MICROSOFT_SSO_CLIENT_ID` set.

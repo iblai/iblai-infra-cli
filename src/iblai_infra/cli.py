@@ -519,7 +519,7 @@ def launch(
     github_org: str = typer.Option("iblai", "--github-org", help="GitHub org owning the private CLI ops + prod images repos"),
     cli_ops_repo: str = typer.Option("iblai-cli-ops", "--cli-ops-repo", help="CLI ops repo, or 'repo/subdir' to install from a subdirectory of a monorepo"),
     prod_images_repo: str = typer.Option("iblai-prod-images", "--prod-images-repo", help="Prod images repo, or 'repo/subdir' to install from a subdirectory of a monorepo"),
-    admin_username: str = typer.Option("ibl_admin", "--admin-username", help="Admin username"),
+    admin_username: str = typer.Option("platform_admin", "--admin-username", help="Admin username (cannot be a reserved name like 'ibl_admin')"),
     openai_key: str = typer.Option("", "--openai-key", help="OpenAI API key (optional)"),
     enable_ai: bool = typer.Option(True, "--enable-ai/--no-ai", help="Enable AI features"),
     create_playwright_platforms: bool = typer.Option(
@@ -547,8 +547,11 @@ def launch(
     google_sso_client_id: str = typer.Option("", "--google-sso-client-id", help="Google OAuth Client ID. Setting this enables the Google SSO ansible role."),
     google_sso_client_secret: str = typer.Option("", "--google-sso-client-secret", help="Google OAuth Client Secret"),
     google_sso_organization: str = typer.Option("", "--google-sso-organization", help="Organization short name to attach to the OAuth2ProviderConfig (optional)"),
-    # Platform name — drives SSO backend_name + platform_key. Always populated; defaults to "main"
-    platform_name: str = typer.Option("main", "--platform-name", help="Platform identifier (lowercase). Used to derive SSO backend_name (<platform>-oauth2) and other_settings.platform_key. Default 'main'."),
+    # Platform name — drives SSO backend_name + platform_key AND the
+    # ibl_tenant_platform role. Unset (or empty) resolves to 'main' (system
+    # default tenant — no tenant launch). 'main' is reserved as an explicit
+    # input so operators pick a real tenant key or leave it alone.
+    platform_name: str | None = typer.Option(None, "--platform-name", help="Tenant platform key (lowercase). Leave unset for 'main' (system default, no tenant launch). 'main' is reserved as an explicit value."),
     # Microsoft SSO — `--microsoft-sso-client-id` is the trigger; if empty, the role no-ops
     microsoft_sso_client_id: str = typer.Option("", "--microsoft-sso-client-id", help="Microsoft Azure AD Application (Client) ID. Setting this enables the Microsoft SSO ansible role."),
     microsoft_sso_client_secret: str = typer.Option("", "--microsoft-sso-client-secret", help="Microsoft Azure AD Client Secret value"),
@@ -591,6 +594,46 @@ def launch(
         if not admin_email or not admin_password:
             ui.error("--admin-email and --admin-password are required for single/multi-server deployments.")
             raise typer.Exit(1)
+        from iblai_infra.models import (
+            RESERVED_ADMIN_USERNAMES,
+            RESERVED_PLATFORM_NAMES,
+            is_reserved_admin_username,
+            is_reserved_platform_name,
+        )
+        if is_reserved_admin_username(admin_username):
+            reserved = ", ".join(sorted(RESERVED_ADMIN_USERNAMES))
+            ui.error(
+                f"--admin-username {admin_username!r} is reserved for system use."
+            )
+            ui.muted(f"Reserved: {reserved}. Pick a different name (e.g. 'platform_admin').")
+            raise typer.Exit(1)
+        # --platform-name 'main' is rejected explicitly. Unset resolves to
+        # 'main' silently (system default tenant, no tenant launch).
+        if platform_name is not None and is_reserved_platform_name(platform_name):
+            reserved = ", ".join(sorted(RESERVED_PLATFORM_NAMES))
+            ui.error(
+                f"--platform-name {platform_name!r} is reserved for the system default tenant."
+            )
+            ui.muted(
+                f"Reserved: {reserved}. Omit --platform-name for the default, "
+                "or pick a tenant key like 'acme'."
+            )
+            raise typer.Exit(1)
+    # Resolve None → 'main' downstream so SetupConfig + ansible see a value.
+    platform_name = (platform_name or "main").strip().lower()
+
+    # Heads-up if the operator picked a 32 GB box AND wants AI on. Not blocking —
+    # they can still proceed. Skipped for call-server (LiveKit has different
+    # sizing constraints) and for instance types we don't know the RAM of.
+    if deployment_type != "call-server" and enable_ai:
+        from iblai_infra.models import instance_ram_gb
+        ram = instance_ram_gb(instance_type)
+        if ram is not None and ram <= 32:
+            ui.warning(
+                f"--instance-type [highlight]{instance_type}[/highlight] has {ram} GB RAM "
+                f"and AI features are enabled."
+            )
+            ui.muted("  64 GB (e.g. m5.4xlarge or r5.2xlarge) is strongly recommended for AI workloads.")
 
     _run_launch(
         ami_id=ami_id, domain=domain, hosted_zone_id=hosted_zone_id,
@@ -706,7 +749,18 @@ def launch_env(
     volume_size = int(env.get("VOLUME_SIZE", "200"))
     environment = env.get("ENVIRONMENT", "staging")
     cli_tag = env.get("CLI_TAG", "3.19.0")
-    admin_username = env.get("ADMIN_USERNAME", "ibl_admin")
+    admin_username = env.get("ADMIN_USERNAME", "platform_admin").strip()
+    from iblai_infra.models import (
+        RESERVED_ADMIN_USERNAMES,
+        is_reserved_admin_username,
+    )
+    if is_reserved_admin_username(admin_username):
+        reserved = ", ".join(sorted(RESERVED_ADMIN_USERNAMES))
+        ui.error(
+            f"ADMIN_USERNAME={admin_username!r} is reserved for system use."
+        )
+        ui.muted(f"Reserved: {reserved}. Pick a different name (e.g. 'platform_admin').")
+        raise typer.Exit(1)
     openai_key = env.get("OPENAI_API_KEY", "")
     enable_ai = env.get("ENABLE_AI", "true").lower() in ("true", "1", "yes")
     create_playwright_platforms = env.get("CREATE_PLAYWRIGHT_PLATFORMS", "false").lower() in ("true", "1", "yes")
@@ -730,7 +784,29 @@ def launch_env(
     google_sso_client_id = env.get("GOOGLE_SSO_CLIENT_ID", "")
     google_sso_client_secret = env.get("GOOGLE_SSO_CLIENT_SECRET", "")
     google_sso_organization = env.get("GOOGLE_SSO_ORGANIZATION", "")
-    platform_name = env.get("PLATFORM_NAME", "main")
+    # PLATFORM_NAME: blank/absent → 'main' (system default tenant, no tenant
+    # launch). Explicit 'main' is rejected — operator must either leave it
+    # alone or pick a real tenant key.
+    raw_platform_name = env.get("PLATFORM_NAME")
+    if raw_platform_name is not None and raw_platform_name.strip():
+        from iblai_infra.models import (
+            RESERVED_PLATFORM_NAMES,
+            is_reserved_platform_name,
+        )
+        candidate = raw_platform_name.strip().lower()
+        if is_reserved_platform_name(candidate):
+            reserved = ", ".join(sorted(RESERVED_PLATFORM_NAMES))
+            ui.error(
+                f"PLATFORM_NAME={candidate!r} is reserved for the system default tenant."
+            )
+            ui.muted(
+                f"Reserved: {reserved}. Remove the line (or leave it unset) to "
+                "use the default, or pick a tenant key like 'acme'."
+            )
+            raise typer.Exit(1)
+        platform_name = candidate
+    else:
+        platform_name = "main"
     microsoft_sso_client_id = env.get("MICROSOFT_SSO_CLIENT_ID", "")
     microsoft_sso_client_secret = env.get("MICROSOFT_SSO_CLIENT_SECRET", "")
     microsoft_sso_tenant_id = env.get("MICROSOFT_SSO_TENANT_ID", "")
@@ -756,6 +832,16 @@ def launch_env(
         ("AI features", "Enabled" if enable_ai else "Disabled"),
     ]
     ui.summary_panel("Launch Configuration", rows)
+
+    # Same memory heads-up as the `launch` flag-driven flow.
+    if enable_ai:
+        from iblai_infra.models import instance_ram_gb
+        ram = instance_ram_gb(instance_type)
+        if ram is not None and ram <= 32:
+            ui.warning(
+                f"INSTANCE_TYPE={instance_type!r} has {ram} GB RAM and AI features are enabled."
+            )
+            ui.muted("  64 GB (e.g. m5.4xlarge or r5.2xlarge) is strongly recommended for AI workloads.")
 
     confirm = questionary.confirm(
         "Proceed with launch?",
@@ -856,6 +942,23 @@ def provision_env(
     elif config.credentials.profile:
         rows.append(("AWS profile", config.credentials.profile))
     ui.summary_panel("Provision Configuration", rows)
+
+    # Same memory heads-up the interactive `provision` wizard and the launch
+    # flows surface. provision-env doesn't know whether AI will be enabled
+    # downstream (that's a setup-step decision), so we warn unconditionally
+    # on 32 GB boxes — the operator can ignore if they're sure AI stays off.
+    from iblai_infra.models import instance_ram_gb
+    ram = instance_ram_gb(config.compute.instance_type)
+    if ram is not None and ram <= 32:
+        ui.warning(
+            f"INSTANCE_TYPE={config.compute.instance_type!r} has {ram} GB RAM."
+        )
+        ui.muted(
+            "  If you plan to enable AI features during setup (the default for IBL deployments),"
+        )
+        ui.muted(
+            "  64 GB (e.g. m5.4xlarge or r5.2xlarge) is strongly recommended."
+        )
 
     ui.newline()
     ui.console.print("  [brand]Provisioning infrastructure...[/brand]")

@@ -257,3 +257,135 @@
   ansible.builtin.debug:
     msg: "Microsoft SSO configured for learn.{{ base_domain }} (platform={{ platform_name | default('main') }}, organization={{ microsoft_sso_organization or '(none)' }})"
   when: microsoft_sso_enabled | default(false) | bool
+
+# ---------------------------------------------------------------------------
+# IBL_SPA.AUTH patches consumed by the Auth + Mentor SPAs at boot.
+#
+#   - EXTERNAL_IDP_LOGOUT_URL  — hit by the Auth SPA on sign-out to redirect
+#     the user through Microsoft's logout endpoint, then back to our own
+#     auth host (so the Azure session is killed alongside ours).
+#   - IBL_DIRECT_SSO_URL       — the "Sign in with Microsoft" deep link the
+#     SPA renders. Points at the LMS python-social-auth login endpoint for
+#     this platform's backend (`<platform_name>-oauth2`), with an inner
+#     `?next=...` that completes the OAuth dance back into the SPA's
+#     /login/complete callback. The inner client_id MUST be the same
+#     EDX_SSO_CLIENT_ID the ibl_spa role minted for the `spa-sso`
+#     Application — we read it from config.yml rather than re-deriving it.
+#
+# Tenant ID: uses `microsoft_sso_tenant_id` when set; falls back to "common"
+# (multi-tenant) when blank. Same pattern as the existing logout_url in the
+# OAuth2ProviderConfig.other_settings JSON above.
+#
+# Idempotent: only marks `changed` (and triggers the downstream
+# `ibl config save` + SPA restart) when the resolved values differ from
+# what's already in config.yml.
+# ---------------------------------------------------------------------------
+
+- name: Patch IBL_SPA.AUTH with Microsoft SSO logout + direct-SSO URLs
+  become: false
+  ansible.builtin.shell:
+    cmd: |
+      python3 <<'PY'
+      import sys
+      import yaml
+      from urllib.parse import quote
+
+      PATH = "{{ ibl_root }}/config.yml"
+      BASE_DOMAIN = "{{ base_domain }}"
+      PLATFORM_NAME = "{{ platform_name | default('main') }}"
+      TENANT_ID = "{{ microsoft_sso_tenant_id }}".strip() or "common"
+      BACKEND_NAME = PLATFORM_NAME + "-oauth2"
+
+      with open(PATH) as f:
+          cfg = yaml.safe_load(f) or {}
+
+      spa = cfg.setdefault("IBL_SPA", {})
+      auth = spa.setdefault("AUTH", {})
+
+      spa_sso_client_id = (spa.get("EDX_SSO_CLIENT_ID") or "").strip()
+      if not spa_sso_client_id:
+          print("ERROR: IBL_SPA.EDX_SSO_CLIENT_ID is empty — ibl_spa role must run first")
+          sys.exit(1)
+
+      external_logout = (
+          "https://login.microsoftonline.com/" + TENANT_ID +
+          "/oauth2/v2.0/logout?post_logout_redirect_uri=" +
+          "https://auth." + BASE_DOMAIN
+      )
+
+      # Inner /oauth2/authorize URL the LMS completes into after Microsoft
+      # auth. URL-encoded verbatim into the outer `next=` query param so
+      # python-social-auth treats the whole thing as one opaque target.
+      inner_next = (
+          "/oauth2/authorize?response_type=code"
+          "&client_id=" + spa_sso_client_id +
+          "&scope=profile email"
+          "&redirect_uri=https://auth." + BASE_DOMAIN + "/login/complete"
+      )
+      direct_sso = (
+          "https://learn." + BASE_DOMAIN + "/auth/login/" + BACKEND_NAME +
+          "/?auth_entry=login&next=" + quote(inner_next, safe="")
+      )
+
+      desired = {
+          "EXTERNAL_IDP_LOGOUT_URL": external_logout,
+          "IBL_DIRECT_SSO_URL": direct_sso,
+      }
+      current = {k: auth.get(k) for k in desired}
+      if current == desired:
+          print("SPA_AUTH_UNCHANGED")
+      else:
+          auth.update(desired)
+          with open(PATH, "w") as f:
+              yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False)
+          print("SPA_AUTH_PATCHED")
+      PY
+    executable: /bin/bash
+  register: spa_auth_patch
+  changed_when: "'SPA_AUTH_PATCHED' in (spa_auth_patch.stdout | default(''))"
+  when: microsoft_sso_enabled | default(false) | bool
+
+- name: Save platform config (regenerate SPA env files)
+  become: false
+  ansible.builtin.shell:
+    cmd: |
+      export PYENV_ROOT="{{ pyenv_root }}"
+      export PATH="$PYENV_ROOT/bin:$PATH"
+      eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+      pyenv activate "{{ venv_name }}"
+      ibl config save
+    executable: /bin/bash
+    chdir: "{{ repo_dir }}"
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+    IBL_ROOT: "{{ ibl_root }}/"
+  when:
+    - microsoft_sso_enabled | default(false) | bool
+    - spa_auth_patch.changed | default(false)
+
+# `docker compose down && up -d` (not `restart`) because compose only
+# re-reads the env file at container creation time. The Auth SPA owns the
+# IBL_DIRECT_SSO_URL / EXTERNAL_IDP_LOGOUT_URL renders directly; the Mentor
+# SPA reuses the same AUTH block for its login deep link.
+- name: Restart Auth + Mentor SPAs to pick up new IBL_SPA.AUTH values
+  become: false
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      cd {{ ibl_root }}/app/ibl-spa/auth/ && docker compose down && docker compose up -d
+      cd {{ ibl_root }}/app/ibl-spa/mentor/ && docker compose down && docker compose up -d
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ ansible_user }}"
+  when:
+    - microsoft_sso_enabled | default(false) | bool
+    - spa_auth_patch.changed | default(false)
+
+- name: Confirm IBL_SPA.AUTH patched for Microsoft SSO
+  ansible.builtin.debug:
+    msg: >-
+      IBL_SPA.AUTH updated: EXTERNAL_IDP_LOGOUT_URL → login.microsoftonline.com/{{ microsoft_sso_tenant_id | default('common', true) }}/...,
+      IBL_DIRECT_SSO_URL → learn.{{ base_domain }}/auth/login/{{ platform_name | default('main') }}-oauth2/...
+  when:
+    - microsoft_sso_enabled | default(false) | bool
+    - spa_auth_patch.changed | default(false)

@@ -408,15 +408,15 @@ class TestConstants:
         assert TOTAL_ROLES == len(ROLE_LABELS)
 
     def test_expected_roles(self):
-        expected = {"docker", "awscli", "python", "ibl_cli_ops", "ibl_platform", "smtp_config", "ibl_dm", "ibl_edx", "ibl_spa", "integrations", "admin_setup", "data_seeding", "stripe_config", "google_sso_config", "microsoft_sso_config"}
+        expected = {"docker", "awscli", "python", "ibl_cli_ops", "ibl_platform", "smtp_config", "ibl_dm", "ibl_edx", "ibl_spa", "integrations", "admin_setup", "data_seeding", "ibl_tenant_platform", "stripe_config", "google_sso_config", "microsoft_sso_config"}
         assert set(ROLE_LABELS.keys()) == expected
 
     def test_launch_role_labels(self):
-        expected = {"ibl_cli_ops", "ibl_launch", "smtp_config", "ibl_launch_services", "integrations", "admin_setup", "data_seeding", "stripe_config", "google_sso_config", "microsoft_sso_config"}
+        expected = {"ibl_cli_ops", "ibl_launch", "smtp_config", "ibl_launch_services", "integrations", "admin_setup", "data_seeding", "ibl_tenant_platform", "stripe_config", "google_sso_config", "microsoft_sso_config"}
         assert set(LAUNCH_ROLE_LABELS.keys()) == expected
 
     def test_launch_role_labels_count(self):
-        assert len(LAUNCH_ROLE_LABELS) == 10
+        assert len(LAUNCH_ROLE_LABELS) == 11
 
     def test_service_update_role_labels(self):
         expected = {"ibl_cli_ops", "ibl_service_update"}
@@ -454,12 +454,19 @@ class TestSSHTest:
         with patch("iblai_infra.ansible.runner.subprocess.run", return_value=mock_result):
             assert runner._test_ssh() is False
 
+    # The five tests below exercise the retry path of `_test_ssh()`
+    # (10 retries × 15s sleep). They mock `time.sleep` so they finish
+    # in milliseconds while still asserting the exhaust-retries → False
+    # behavior end-to-end.
     def test_ssh_connection_refused(self, runner):
         mock_result = MagicMock()
         mock_result.returncode = 255
         mock_result.stderr = "Connection refused"
 
-        with patch("iblai_infra.ansible.runner.subprocess.run", return_value=mock_result):
+        with (
+            patch("iblai_infra.ansible.runner.subprocess.run", return_value=mock_result),
+            patch("iblai_infra.ansible.runner.time.sleep"),
+        ):
             assert runner._test_ssh() is False
 
     def test_ssh_connection_timed_out(self, runner):
@@ -467,7 +474,10 @@ class TestSSHTest:
         mock_result.returncode = 255
         mock_result.stderr = "Connection timed out"
 
-        with patch("iblai_infra.ansible.runner.subprocess.run", return_value=mock_result):
+        with (
+            patch("iblai_infra.ansible.runner.subprocess.run", return_value=mock_result),
+            patch("iblai_infra.ansible.runner.time.sleep"),
+        ):
             assert runner._test_ssh() is False
 
     def test_ssh_no_route(self, runner):
@@ -475,7 +485,10 @@ class TestSSHTest:
         mock_result.returncode = 255
         mock_result.stderr = "No route to host"
 
-        with patch("iblai_infra.ansible.runner.subprocess.run", return_value=mock_result):
+        with (
+            patch("iblai_infra.ansible.runner.subprocess.run", return_value=mock_result),
+            patch("iblai_infra.ansible.runner.time.sleep"),
+        ):
             assert runner._test_ssh() is False
 
     def test_ssh_other_error(self, runner):
@@ -483,7 +496,10 @@ class TestSSHTest:
         mock_result.returncode = 1
         mock_result.stderr = "Some unexpected error"
 
-        with patch("iblai_infra.ansible.runner.subprocess.run", return_value=mock_result):
+        with (
+            patch("iblai_infra.ansible.runner.subprocess.run", return_value=mock_result),
+            patch("iblai_infra.ansible.runner.time.sleep"),
+        ):
             assert runner._test_ssh() is False
 
     def test_ssh_empty_stderr(self, runner):
@@ -491,7 +507,10 @@ class TestSSHTest:
         mock_result.returncode = 1
         mock_result.stderr = ""
 
-        with patch("iblai_infra.ansible.runner.subprocess.run", return_value=mock_result):
+        with (
+            patch("iblai_infra.ansible.runner.subprocess.run", return_value=mock_result),
+            patch("iblai_infra.ansible.runner.time.sleep"),
+        ):
             assert runner._test_ssh() is False
 
 

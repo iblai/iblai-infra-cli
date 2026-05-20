@@ -34,7 +34,7 @@ def _required_env(**overrides) -> dict[str, str]:
         "AWS_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
         "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
         "GIT_TOKEN": "test-pat-value",
-        "ADMIN_USERNAME": "ibl_admin",
+        "ADMIN_USERNAME": "platform_admin",
         "ADMIN_EMAIL": "admin@example.com",
         "ADMIN_PASSWORD": "change-me-min-8-chars",
     }
@@ -100,7 +100,7 @@ class TestProvisionedMode:
         assert config.target_host == "54.123.45.67"  # from project_state fixture
         assert config.base_domain == "example.com"
         assert config.aws_default_region == "us-east-1"
-        assert config.admin_username == "ibl_admin"
+        assert config.admin_username == "platform_admin"
 
     def test_aws_default_region_derived_from_state(self, project_state):
         project_state.config.credentials.region = "eu-west-1"

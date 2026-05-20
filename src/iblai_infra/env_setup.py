@@ -35,9 +35,13 @@ from iblai_infra.models import (
     InfraConfig,
     NetworkConfig,
     ProjectState,
+    RESERVED_ADMIN_USERNAMES,
+    RESERVED_PLATFORM_NAMES,
     SetupConfig,
     SSHConfig,
     SSHKeyMethod,
+    is_reserved_admin_username,
+    is_reserved_platform_name,
 )
 from iblai_infra.prompts.setup import validate_key_permissions
 from iblai_infra.terraform.state import WORKSPACE_ROOT, load_state, save_state
@@ -200,6 +204,33 @@ def build_setup_config_from_env(
     admin_password = env["ADMIN_PASSWORD"]
     if len(admin_password) < 8:
         raise _fail("ADMIN_PASSWORD must be at least 8 characters.")
+    admin_username = env["ADMIN_USERNAME"].strip()
+    if is_reserved_admin_username(admin_username):
+        reserved = ", ".join(sorted(RESERVED_ADMIN_USERNAMES))
+        raise _fail(
+            f"ADMIN_USERNAME={admin_username!r} is reserved for system use.",
+            hint=f"Reserved usernames: {reserved}. Pick a different one (e.g. 'platform_admin').",
+        )
+
+    # PLATFORM_NAME: blank/absent → resolves to 'main' (system default
+    # tenant, no tenant launch). Explicitly setting it to 'main' is
+    # rejected — operators shouldn't pick the reserved name; they should
+    # either leave it unset or pick a real tenant key.
+    raw_platform_name = env.get("PLATFORM_NAME")
+    if raw_platform_name is not None and raw_platform_name.strip():
+        candidate = raw_platform_name.strip().lower()
+        if is_reserved_platform_name(candidate):
+            reserved = ", ".join(sorted(RESERVED_PLATFORM_NAMES))
+            raise _fail(
+                f"PLATFORM_NAME={candidate!r} is reserved for the system default tenant.",
+                hint=(
+                    f"Reserved: {reserved}. Leave PLATFORM_NAME unset (or remove the line) "
+                    f"to use the default, or pick a tenant key like 'acme'."
+                ),
+            )
+        platform_name = candidate
+    else:
+        platform_name = "main"
 
     # Resolve "where to deploy" fields, allowing env to override state.
     target_host = (env.get("TARGET_HOST") or "").strip()
@@ -273,7 +304,7 @@ def build_setup_config_from_env(
         cli_ops_repo=(env.get("CLI_OPS_REPO") or "iblai-cli-ops").strip(),
         prod_images_repo=(env.get("PROD_IMAGES_REPO") or "iblai-prod-images").strip(),
         openai_api_key=(env.get("OPENAI_API_KEY") or "").strip(),
-        admin_username=env["ADMIN_USERNAME"].strip(),
+        admin_username=admin_username,
         admin_email=admin_email,
         admin_password=admin_password,
         # SMTP
@@ -299,7 +330,7 @@ def build_setup_config_from_env(
             env.get("STRIPE_CONNECT_WEBHOOK_SECRET") or ""
         ).strip(),
         # Platform name + SSO
-        platform_name=(env.get("PLATFORM_NAME") or "main").strip().lower(),
+        platform_name=platform_name,
         google_sso_enabled=google_sso_enabled,
         google_sso_client_id=google_sso_client_id,
         google_sso_client_secret=(env.get("GOOGLE_SSO_CLIENT_SECRET") or "").strip(),
