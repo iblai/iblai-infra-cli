@@ -129,9 +129,9 @@ Two distinct AWS credential sets serve the running platform:
 | Credential set | Provided by | Used for |
 |---|---|---|
 | **S3** — the runtime user this section is about | You, in your own AWS account, post-provision | Read / write the three buckets Terraform just created |
-| **ECR** — image-registry pulls | IBL (out-of-band handoff) | `docker login` against IBL's container registry |
+| **ECR** — image-registry pulls | AWS credentials provided by ibl.ai — or contact us at [ibl.ai/contact](https://ibl.ai/contact) | `docker login` against IBL's container registry |
 
-This section covers only the **S3** set. ECR credentials are provided separately by IBL — follow their handoff procedure for those.
+This section covers only the **S3** set.
 
 When `provision` / `provision-env` finishes it prints the exact S3-only IAM policy JSON (also saved to `<workspace>/runtime-iam-policy.json`) plus three `aws` commands to copy-paste:
 

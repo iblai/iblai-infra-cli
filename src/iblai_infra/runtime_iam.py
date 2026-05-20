@@ -168,7 +168,7 @@ def render_runtime_access_instructions(
         f"  [brand]iblai infra setup-env {config.project_name} -f .env.setup[/brand]\n"
     )
     ui.muted(
-        "  ECR pull credentials for IBL's image registry are provided "
-        "separately by IBL — they are NOT what you set up here."
+        "  For ECR images, use AWS credentials provided by ibl.ai — "
+        "or contact us at https://ibl.ai/contact"
     )
     ui.newline()
