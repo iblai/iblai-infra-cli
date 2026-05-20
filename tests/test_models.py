@@ -161,10 +161,14 @@ class TestNetworkConfigValidation:
 
 class TestComputeConfigValidation:
     def test_valid_volume_size(self):
-        cc = ComputeConfig(volume_size=100)
-        assert cc.volume_size == 100
+        cc = ComputeConfig(volume_size=200)
+        assert cc.volume_size == 200
 
     def test_minimum_volume_size(self):
+        # ComputeConfig itself only enforces 20 GB (the call-server placeholder
+        # path reuses this model with ~40 GB). The 100 GB IBL-platform floor
+        # is enforced on `InfraConfig` for `DeploymentType.SINGLE` — see
+        # TestSingleServerVolumeFloor below.
         cc = ComputeConfig(volume_size=20)
         assert cc.volume_size == 20
 
@@ -183,7 +187,7 @@ class TestComputeConfigValidation:
     def test_defaults(self):
         cc = ComputeConfig()
         assert cc.instance_type == "t3.2xlarge"
-        assert cc.volume_size == 50
+        assert cc.volume_size == 100
         assert cc.volume_type == "gp3"
 
 

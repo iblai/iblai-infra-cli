@@ -47,7 +47,7 @@ def infra_config(aws_credentials: AWSCredentials) -> InfraConfig:
         environment=Environment.DEV,
         credentials=aws_credentials,
         network=NetworkConfig(vpc_cidr="10.0.0.0/16", vpn_ip="203.0.113.42"),
-        compute=ComputeConfig(instance_type="t3.2xlarge", volume_size=50, volume_type="gp3"),
+        compute=ComputeConfig(instance_type="t3.2xlarge", volume_size=100, volume_type="gp3"),
         ssh=SSHConfig(
             method=SSHKeyMethod.GENERATE,
             key_name="testproject-dev",

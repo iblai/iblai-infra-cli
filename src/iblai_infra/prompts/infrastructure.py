@@ -23,7 +23,31 @@ from iblai_infra.models import (
     SSHConfig,
     SSHKeyMethod,
     generate_password,
+    instance_ram_gb,
 )
+
+
+def _warn_if_low_memory(instance_type: str, *, context: str = "") -> None:
+    """Warn the operator when they pick a 32 GB (or smaller) instance.
+
+    AI workloads on the platform (mentor LLMs, embedding generation, retrieval)
+    can easily exhaust 32 GB once concurrent users + edX + DM are all in play.
+    We surface a non-blocking heads-up so the operator can revise their pick
+    before terraform provisions the box. Unknown / custom instance types are
+    skipped — we can't reason about their memory.
+    """
+    ram = instance_ram_gb(instance_type)
+    if ram is None or ram > 32:
+        return
+    label = f"[highlight]{instance_type}[/highlight] ({ram} GB RAM)"
+    where = f" for {context}" if context else ""
+    ui.warning(f"Selected{where}: {label}.")
+    ui.muted(
+        "  If you plan to enable AI features (the default for IBL deployments),"
+    )
+    ui.muted(
+        "  64 GB (e.g. [brand]m5.4xlarge[/brand] or [brand]r5.2xlarge[/brand]) is strongly recommended."
+    )
 from iblai_infra.providers.aws import (
     detect_current_ip,
     get_session,
@@ -156,11 +180,13 @@ def prompt_project_and_compute() -> (
         if instance_type is None:
             ui.abort()
 
+    _warn_if_low_memory(instance_type)
+
     # ----- single-server: volume -----
     volume_size = questionary.text(
         "Root volume size in GB:",
-        default="50",
-        validate=lambda v: (v.isdigit() and int(v) >= 20) or "Must be a number >= 20",
+        default="100",
+        validate=lambda v: (v.isdigit() and int(v) >= 100) or "Must be a number >= 100",
         style=ui.PROMPT_STYLE,
         qmark=ui.QMARK,
     ).ask()
@@ -231,10 +257,12 @@ def _prompt_multi_server_config() -> MultiServerConfig:
         if app_instance_type is None:
             ui.abort()
 
+    _warn_if_low_memory(app_instance_type, context="app server")
+
     app_volume = questionary.text(
         "App server volume size (GB):",
         default="250",
-        validate=lambda v: (v.isdigit() and int(v) >= 20) or "Must be >= 20",
+        validate=lambda v: (v.isdigit() and int(v) >= 100) or "Must be >= 100",
         style=ui.PROMPT_STYLE,
         qmark=ui.QMARK,
     ).ask()
@@ -270,10 +298,12 @@ def _prompt_multi_server_config() -> MultiServerConfig:
         if svc_instance_type is None:
             ui.abort()
 
+    _warn_if_low_memory(svc_instance_type, context="services server")
+
     svc_volume = questionary.text(
         "Services server volume size (GB):",
         default="500",
-        validate=lambda v: (v.isdigit() and int(v) >= 20) or "Must be >= 20",
+        validate=lambda v: (v.isdigit() and int(v) >= 100) or "Must be >= 100",
         style=ui.PROMPT_STYLE,
         qmark=ui.QMARK,
     ).ask()

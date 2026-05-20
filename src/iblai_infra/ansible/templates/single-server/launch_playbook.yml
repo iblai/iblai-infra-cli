@@ -30,6 +30,7 @@
     - integrations
     - admin_setup
     - data_seeding
+    - ibl_tenant_platform
     - stripe_config
     - google_sso_config
     - microsoft_sso_config
@@ -39,3 +40,25 @@
       ansible.builtin.include_role:
         name: playwright_test_platforms
       when: create_playwright_platforms | default(false) | bool
+
+  post_tasks:
+    # Final unconditional proxy reload. Runs AFTER every role and the
+    # optional Playwright include, so any nginx state touched by SSO
+    # roles (edX restarts in google_sso_config / microsoft_sso_config)
+    # is picked up before the playbook exits. Mirrors the post_tasks
+    # block in playbook.yml so `launch` / `launch-env` get the same
+    # final-reload guarantee that `setup` / `setup-env` already have.
+    - name: Reload global proxy (final step)
+      become: false
+      ansible.builtin.shell: |
+        export PYENV_ROOT="{{ pyenv_root }}"
+        export PATH="$PYENV_ROOT/bin:$PATH"
+        eval "$(pyenv init -)"; eval "$(pyenv virtualenv-init -)"
+        pyenv activate "{{ venv_name }}"
+        ibl global-proxy reload
+      args:
+        executable: /bin/bash
+        chdir: "{{ repo_dir }}"
+      environment:
+        HOME: "/home/{{ ansible_user }}"
+        IBL_ROOT: "{{ ibl_root }}/"

@@ -150,7 +150,8 @@
     spa = cfg.setdefault('IBL_SPA', {})
     mentor = spa.setdefault('MENTOR', {})
     mentor['ENABLE_RBAC'] = 'true'
-    mentor['STRIPE_ENABLED'] = 'true'
+    mentor['STRIPE_ENABLED'] = 'false'
+    mentor['ENABLE_ADVERTISING'] = 'false'
     mentor['SKIP_TEST'] = 'true'
     mentor['ENABLE_APP_SITE_ASSOCIATION'] = 'true'
     mentor['CANVAS_ADMIN_ONLY'] = 'false'

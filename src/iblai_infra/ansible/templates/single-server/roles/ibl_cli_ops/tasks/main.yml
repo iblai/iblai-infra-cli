@@ -44,7 +44,7 @@
 # and crashes on `ibl --help`. Reinstalling here overrides the wrong
 # package with the right one (e.g. iblai/iblai-cli-ops@5.8.1, or a
 # subdir of a client monorepo like
-# kaplan-iblai-infra-ops/iblai-cli-ops@v1.0.1).
+# <client>-iblai-infra-ops/iblai-cli-ops@v1.0.1).
 - name: Install iblai-cli-ops (override transitive ibl-cli with correct repo+tag)
   become: false
   shell: |

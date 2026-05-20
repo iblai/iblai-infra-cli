@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.10.0] — 2026-05-20
+
+### Added
+- **`ibl_tenant_platform` ansible role** — launches a tenant `Platform` (Platform + admin User + UserPlatformLink) via `run_launch_steps` when `PLATFORM_NAME` is set to anything other than `main`. NOT a raw `Platform.objects.create()` — the state machine fires every after_launch signal (default apps, edX hooks, UserPlatformLink flags). Wired into both `playbook.yml` (setup / setup-env) and `launch_playbook.yml` (launch / launch-env). Skips + logs on re-runs when the tenant already exists. Also writes `PLATFORM_NAME=<KEY>` (uppercase) at the root of `/ibl/config.yml` and enforces `Platform.show_paywall=False` + `Platform.is_advertising=False` as defense in depth. Surfaces the generated admin password via the `IBLAI_FIXTURE_OUTPUT` pipeline — printed once after the Rich Live display tears down, never persisted to disk.
+- **Microsoft SSO writes `IBL_SPA.AUTH`** — `microsoft_sso_config` now also patches `EXTERNAL_IDP_LOGOUT_URL` and `IBL_DIRECT_SSO_URL` (using `microsoft_sso_tenant_id`, falling back to `common`), then restarts the Auth + Mentor SPAs so the new auth flow takes effect.
+- **`INSTANCE_RAM_GB` helper + 32 GB memory warning** — non-blocking heads-up suggesting 64 GB (e.g. `m5.4xlarge` / `r5.2xlarge`) when the operator picks a 32 GB instance. Always shown in the interactive provision wizard and `provision-env`; conditional in `launch` / `launch-env` (only when AI is enabled).
+- **Final `ibl global-proxy reload`** added as `post_tasks` in both `playbook.yml` and `launch_playbook.yml`, so any nginx state touched by SSO roles (edX restarts in `google_sso_config` / `microsoft_sso_config`) is reloaded before the playbook exits.
+- **`RESERVED_ADMIN_USERNAMES` + `RESERVED_PLATFORM_NAMES`** — `models.py` constants, surfaced via `is_reserved_admin_username()` and `is_reserved_platform_name()` helpers and an `InfraConfig` model_validator.
+
+### Changed
+- **Stripe billing UI off by default** — `IBL_SPA.MENTOR.STRIPE_ENABLED=false` and `IBL_SPA.MENTOR.ENABLE_ADVERTISING=false` are now written unconditionally by `ibl_spa` (fresh installs) and `ibl_launch_services` (AMI launches). **Behavior change:** Stripe-using deployments must explicitly flip `IBL_SPA.MENTOR.STRIPE_ENABLED` back to `'true'` post-setup. The previous "always on" SPA flag surfaced billing UI even when Stripe wasn't actually configured.
+- **100 GB minimum root volume for single / multi server** — enforced by Pydantic (`InfraConfig` model_validator gated on `DeploymentType.SINGLE`, plus `MultiServerConfig.validate_volume_sizes`) and matching interactive + CLI + .env input checks. **Behavior change:** values below 100 GB are now rejected upfront. Default `ComputeConfig.volume_size` bumped 50 → 100. Call-server unchanged (LiveKit only needs ~40 GB).
+- **`ADMIN_USERNAME=ibl_admin` rejected at every input layer** — reserved for the SPA OAuth Application owner the platform itself maintains. New default suggestion is `platform_admin`. Interactive prompts, `.env` parsers, and `--admin-username` flag all reject `ibl_admin` with a clear reserved-name error. **Behavior change:** scripted deploys passing `ADMIN_USERNAME=ibl_admin` must rename.
+- **`PLATFORM_NAME=main` rejected as an explicit input** — unset / blank silently resolves to `main` (preserving SSO `backend_name=main-oauth2` and skipping the tenant launcher). **Behavior change:** scripted deploys passing `PLATFORM_NAME=main` should drop the line.
+- **README** — refreshed against current playbook (16 roles, phase-grouped table), three deployment topologies, sizing guidance, tenant launcher, reserved-name rules. -50 lines net.
+
+### Removed
+- **All references to a specific canonical-client name** from comments, docstrings, prompt instructions, error hints, and example .env files. Placeholders: `<client>` for monorepo org names, `acme` for tenant-key examples.
+
+### Fixed
+- **Slow `_test_ssh()` retry-path tests** — five tests in `tests/ansible/test_runner.py` exercise the SSH-retry exhaust path (10 retries × 15 s sleep). They now mock `time.sleep` alongside the existing `subprocess.run` mock, cutting ~11 minutes off the full suite. Test count: 562 passing in ~1.3 s.
+
 ## [1.7.0] — 2026-05-06
 
 ### Added
@@ -38,7 +60,7 @@
 ## [1.5.0] — 2026-04-30
 
 ### Added
-- **Monorepo subdirectory installs** — `--cli-ops-repo` / `--prod-images-repo` (and the matching setup prompts) now accept a `repo/subdir` path, e.g. `kaplan-iblai-infra-ops/kaplan-iblai-prod-images`. The ansible role appends `&subdirectory=<subdir>` to the install URL so a single client monorepo can host both `iblai-cli-ops` and the prod-images package
+- **Monorepo subdirectory installs** — `--cli-ops-repo` / `--prod-images-repo` (and the matching setup prompts) now accept a `repo/subdir` path, e.g. `<client>-iblai-infra-ops/<client>-iblai-prod-images`. The ansible role appends `&subdirectory=<subdir>` to the install URL so a single client monorepo can host both `iblai-cli-ops` and the prod-images package
 - **`parse_repo_path()` helper** in `models.py` — splits operator input into `(repo, subdir)`. Bare `iblai-cli-ops` keeps the canonical behavior; subdir-form unlocks per-client monorepo deployments
 - **`cli_ops_subdir` / `prod_images_subdir` extra-vars** passed through `AnsibleRunner` to the `ibl_cli_ops` role (single-server + call-server templates)
 
