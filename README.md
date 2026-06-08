@@ -9,7 +9,7 @@ Interactive CLI for provisioning and configuring the [ibl.ai](https://ibl.ai) pl
 [![AWS](https://img.shields.io/badge/AWS-FF9900?logo=amazonaws&logoColor=white)](https://aws.amazon.com)
 [![Terraform](https://img.shields.io/badge/Terraform-7B42BC?logo=terraform&logoColor=white)](https://www.terraform.io)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org)
-[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-blue.svg)](#license)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 </div>
 
@@ -351,4 +351,4 @@ iblai-infra-ops/
 
 ## License
 
-Proprietary -- ibl.ai
+Released under the [MIT License](LICENSE).
